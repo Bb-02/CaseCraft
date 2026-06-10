@@ -1,0 +1,19 @@
+# 编译产物
+*.exe
+*.o
+*.out
+gen
+gen_*
+
+# 生成的测试数据（本地运行产生，不上传）
+Data/*_Data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store

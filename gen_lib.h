@@ -5,8 +5,11 @@
  * 用法：
  *   1. 复制 template.cpp 到新文件
  *   2. 修改 g_problem_id = "你的题目名"
- *   3. 编写 generate() 函数
- *   4. 编译运行：g++ -std=c++17 -O2 your_file.cpp -o gen && ./gen [seed]
+ *   3. 编写 generate_input() 和 solve()
+ *   4. 编译运行：
+ *        g++ -std=c++17 -O2 your_file.cpp -o gen
+ *        ./gen        生成输入 (.in)
+ *        ./gen out    生成输出 (.out)
  *
  * 生成的数据自动放入 Data/{problem_id}_Data/ 目录。
  */
@@ -221,8 +224,8 @@ vector<int> gen_permutation_half_shuffle(int n) {
     vector<int> p(n);
     iota(p.begin(), p.end(), 1);
     int mid = n / 2;
-    rnd->shuffle(vector<int>(p.begin(), p.begin() + mid));
-    rnd->shuffle(vector<int>(p.begin() + mid, p.end()));
+    std::shuffle(p.begin(), p.begin() + mid, rnd->engine);
+    std::shuffle(p.begin() + mid, p.end(), rnd->engine);
     return p;
 }
 
@@ -330,9 +333,28 @@ vector<pair<int, int>> gen_tree_binary(int n) {
 
 // n 个节点 m 条边的简单无向连通图（n-1 <= m <= n*(n-1)/2）
 vector<pair<int, int>> gen_graph_connected(int n, int m) {
-    assert(m >= n - 1 && m <= (long long)n * (n - 1) / 2);
+    long long max_m = (long long)n * (n - 1) / 2;
+    assert(m >= n - 1 && m <= max_m);
+
+    // 先生成树保证连通
     auto edges = gen_tree_prufer(n);
     set<pair<int, int>> edge_set(edges.begin(), edges.end());
+
+    // 稠密图且 n 不大时：枚举所有非树边，shuffle 后取所需数量
+    if (m > max_m * 0.7 && n <= 5000) {
+        vector<pair<int, int>> pool;
+        for (int i = 1; i <= n; i++)
+            for (int j = i + 1; j <= n; j++)
+                if (!edge_set.count({i, j}))
+                    pool.push_back({i, j});
+        rnd->shuffle(pool);
+        for (int i = 0; i < m - (n - 1); i++)
+            edges.push_back(pool[i]);
+        rnd->shuffle(edges);
+        return edges;
+    }
+
+    // 稀疏图：随机碰撞选边
     while ((int)edges.size() < m) {
         int u = rnd->next(1, n), v = rnd->next(1, n);
         if (u == v) continue;
@@ -350,6 +372,18 @@ vector<pair<int, int>> gen_dag(int n, int m) {
     long long max_m = (long long)n * (n - 1) / 2;
     assert(m <= max_m);
     auto perm = gen_permutation(n);
+
+    // 稠密情况：枚举所有可能的拓扑边
+    if (m > max_m * 0.7 && n <= 5000) {
+        vector<pair<int, int>> pool;
+        for (int i = 0; i < n; i++)
+            for (int j = i + 1; j < n; j++)
+                pool.push_back({perm[i], perm[j]});
+        rnd->shuffle(pool);
+        pool.resize(m);
+        return pool;
+    }
+
     set<pair<int, int>> edge_set;
     while ((int)edge_set.size() < m) {
         int i = rnd->next_n(n), j = rnd->next_n(n);
@@ -372,6 +406,18 @@ vector<pair<int, int>> gen_graph_complete(int n) {
 vector<pair<int, int>> gen_graph_bipartite(int n1, int n2, int m) {
     long long max_m = (long long)n1 * n2;
     assert(m <= max_m);
+
+    // 稠密情况：枚举所有可能的二分边
+    if (m > max_m * 0.7 && max_m <= 25000000LL) {
+        vector<pair<int, int>> pool;
+        for (int u = 1; u <= n1; u++)
+            for (int v = n1 + 1; v <= n1 + n2; v++)
+                pool.push_back({u, v});
+        rnd->shuffle(pool);
+        pool.resize(m);
+        return pool;
+    }
+
     set<pair<int, int>> edge_set;
     while ((int)edge_set.size() < m) {
         int u = rnd->next(1, n1);
@@ -528,7 +574,17 @@ inline void gen_output(const function<void(istream &, ostream &)> &solve,
                        const string &dir_hint = "") {
     string dir = dir_hint;
     if (dir.empty()) {
-        dir = "Data/" + g_problem_id + "_Data";
+        if (!g_problem_id.empty())
+            dir = "Data/" + g_problem_id + "_Data";
+        else
+            dir = "data";
+    }
+
+    // 检查目录是否存在
+    if (!fs::exists(dir)) {
+        cerr << "Directory not found: " << dir << '\n';
+        cerr << "Run without 'out' first to generate input files.\n";
+        return;
     }
 
     // 收集所有 .in 文件，按文件名排序

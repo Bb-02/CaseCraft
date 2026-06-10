@@ -52,7 +52,9 @@ struct Random {
 
     explicit Random(uint64_t seed) { engine.seed(seed); }
 
-    // [l, r] 闭区间整数
+    // ========== 整数随机 ==========
+
+    // [l, r] 闭区间整数（支持负数，支持 long long 范围）
     long long next(long long l, long long r) {
         assert(l <= r);
         return uniform_int_distribution<long long>(l, r)(engine);
@@ -67,13 +69,21 @@ struct Random {
         return next(0LL, n - 1);
     }
 
-    // [0.0, 1.0)
-    double next_real() { return uniform_real_distribution<double>(0.0, 1.0)(engine); }
+    // ========== 浮点数随机 ==========
 
-    // [l, r) 实数
-    double next_real(double l, double r) {
+    // [0.0, 1.0) 随机浮点数
+    double next_double() {
+        return uniform_real_distribution<double>(0.0, 1.0)(engine);
+    }
+
+    // [l, r) 随机浮点数
+    double next_double(double l, double r) {
         return uniform_real_distribution<double>(l, r)(engine);
     }
+
+    // 兼容旧名
+    double next_real() { return next_double(); }
+    double next_real(double l, double r) { return next_double(l, r); }
 
     // 以概率 p 返回 true
     bool chance(double p) { return next_real() < p; }
@@ -133,29 +143,6 @@ vector<long long> gen_array(int n, long long l, long long r) {
     return a;
 }
 
-// 生成 1..n 的随机排列
-vector<int> gen_permutation(int n) {
-    vector<int> p(n);
-    iota(p.begin(), p.end(), 1);
-    rnd->shuffle(p);
-    return p;
-}
-
-// 生成长度为 n 的随机小写字母串
-string gen_string(int n) {
-    string s(n, ' ');
-    for (int i = 0; i < n; i++) s[i] = 'a' + rnd->next_n(26);
-    return s;
-}
-
-// 生成长度为 n、字符集为 charset 的随机串
-string gen_string(int n, const string &charset) {
-    assert(!charset.empty());
-    string s(n, ' ');
-    for (int i = 0; i < n; i++) s[i] = rnd->pick(charset);
-    return s;
-}
-
 // 将 n 随机分成 k 个正整数，返回每份大小（和为 n）
 vector<int> gen_partition(int n, int k) {
     assert(n >= k && k >= 1);
@@ -177,6 +164,101 @@ vector<long long> gen_sorted_array(int n, long long l, long long r) {
     auto a = gen_array(n, l, r);
     sort(a.begin(), a.end());
     return a;
+}
+
+// 生成 n 个 [l, r) 的随机浮点数
+vector<double> gen_real_array(int n, double l, double r) {
+    vector<double> a(n);
+    for (int i = 0; i < n; i++) a[i] = rnd->next_double(l, r);
+    return a;
+}
+
+// 生成全是同一个值的数组
+vector<long long> gen_array_same(int n, long long val) {
+    return vector<long long>(n, val);
+}
+
+// 生成严格递增（不重复）的数组：[l, r] 中取 n 个不同的数，排序
+vector<long long> gen_strictly_increasing(int n, long long l, long long r) {
+    assert(n <= r - l + 1);
+    auto vals = rnd->distinct(n, l, r);
+    sort(vals.begin(), vals.end());
+    return vals;
+}
+
+// ============================================================
+// 排列生成器
+// ============================================================
+
+// 1..n 的随机排列
+vector<int> gen_permutation(int n) {
+    vector<int> p(n);
+    iota(p.begin(), p.end(), 1);
+    rnd->shuffle(p);
+    return p;
+}
+
+// 逆序排列：n, n-1, ..., 2, 1
+vector<int> gen_permutation_reverse(int n) {
+    vector<int> p(n);
+    for (int i = 0; i < n; i++) p[i] = n - i;
+    return p;
+}
+
+// 几乎有序的排列：先生成 1..n，再随机做 k 次交换
+vector<int> gen_permutation_almost_sorted(int n, int k) {
+    vector<int> p(n);
+    iota(p.begin(), p.end(), 1);
+    for (int t = 0; t < k; t++) {
+        int i = rnd->next_n(n), j = rnd->next_n(n);
+        swap(p[i], p[j]);
+    }
+    return p;
+}
+
+// 前一半/后一半 分开 shuffle 的排列
+vector<int> gen_permutation_half_shuffle(int n) {
+    vector<int> p(n);
+    iota(p.begin(), p.end(), 1);
+    int mid = n / 2;
+    rnd->shuffle(vector<int>(p.begin(), p.begin() + mid));
+    rnd->shuffle(vector<int>(p.begin() + mid, p.end()));
+    return p;
+}
+
+// ============================================================
+// 字符串生成器
+// ============================================================
+
+// 生成长度为 n 的随机小写字母串
+string gen_string(int n) {
+    string s(n, ' ');
+    for (int i = 0; i < n; i++) s[i] = 'a' + rnd->next_n(26);
+    return s;
+}
+
+// 生成长度为 n、字符集为 charset 的随机串
+string gen_string(int n, const string &charset) {
+    assert(!charset.empty());
+    string s(n, ' ');
+    for (int i = 0; i < n; i++) s[i] = rnd->pick(charset);
+    return s;
+}
+
+// 生成随机回文串
+string gen_palindrome(int n) {
+    string half = gen_string((n + 1) / 2);
+    string s = half;
+    for (int i = n / 2 - 1; i >= 0; i--) s += half[i];
+    return s;
+}
+
+// 生成长度为 n 的全部不同的随机小写字母串（n <= 26）
+string gen_string_distinct(int n) {
+    assert(n <= 26);
+    string chars = "abcdefghijklmnopqrstuvwxyz";
+    auto picked = rnd->sample(vector<char>(chars.begin(), chars.end()), n);
+    return string(picked.begin(), picked.end());
 }
 
 // ============================================================
@@ -237,6 +319,11 @@ vector<pair<int, int>> gen_tree_deg_capped(int n, int max_deg) {
     return edges;
 }
 
+// n 个节点的随机二叉树（每个节点最多 2 个子节点，1 为根）
+vector<pair<int, int>> gen_tree_binary(int n) {
+    return gen_tree_deg_capped(n, 3); // 根最多 2 子 + 可能无父，deg <= 3
+}
+
 // ============================================================
 // 图生成器
 // ============================================================
@@ -268,6 +355,28 @@ vector<pair<int, int>> gen_dag(int n, int m) {
         int i = rnd->next_n(n), j = rnd->next_n(n);
         if (i >= j) continue;
         edge_set.insert({perm[i], perm[j]});
+    }
+    return vector<pair<int, int>>(edge_set.begin(), edge_set.end());
+}
+
+// n 个节点的完全图
+vector<pair<int, int>> gen_graph_complete(int n) {
+    vector<pair<int, int>> edges;
+    for (int i = 1; i <= n; i++)
+        for (int j = i + 1; j <= n; j++)
+            edges.push_back({i, j});
+    return edges;
+}
+
+// 二分图：左部 n1 个节点(1..n1)，右部 n2 个节点(n1+1..n1+n2)，随机 m 条边
+vector<pair<int, int>> gen_graph_bipartite(int n1, int n2, int m) {
+    long long max_m = (long long)n1 * n2;
+    assert(m <= max_m);
+    set<pair<int, int>> edge_set;
+    while ((int)edge_set.size() < m) {
+        int u = rnd->next(1, n1);
+        int v = rnd->next(n1 + 1, n1 + n2);
+        edge_set.insert({u, v});
     }
     return vector<pair<int, int>>(edge_set.begin(), edge_set.end());
 }
@@ -328,6 +437,22 @@ inline void print_edges(ostream &o, const vector<pair<int, int>> &edges) {
 
 inline void print_edges(const vector<pair<int, int>> &edges) {
     print_edges(cout, edges);
+}
+
+// 输出浮点数 vector，指定精度
+template <typename T>
+void print_real_vec(ostream &o, const vector<T> &v, int precision = 6) {
+    o << fixed << setprecision(precision);
+    for (int i = 0; i < (int)v.size(); i++) {
+        if (i) o << ' ';
+        o << v[i];
+    }
+    o << '\n';
+}
+
+template <typename T>
+void print_real_vec(const vector<T> &v, int precision = 6) {
+    print_real_vec(cout, v, precision);
 }
 
 // 创建目录（跨平台）

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 /**
  * gen_lib.h — 算法题数据生成核心库
  *
@@ -8,8 +8,10 @@
  *   3. 编写 generate_input() 和 solve()
  *   4. 编译运行：
  *        g++ -std=c++17 -O2 your_file.cpp -o gen
- *        ./gen        生成输入 (.in)
- *        ./gen out    生成输出 (.out)
+ *        ./gen                    生成输入 (.in)
+ *        ./gen out                生成输出 (.out)
+ *        ./gen check ./my_prog    运行外部程序并检查输出
+ *        ./gen duipai ./my_prog   一键生成输入、标准输出并对拍
  *
  * 生成的数据自动放入 Data/{problem_id}_Data/ 目录。
  */
@@ -627,6 +629,215 @@ inline void gen_output(const function<void(istream &, ostream &)> &solve,
     }
 
     cerr << "Done! " << in_files.size() << " output files generated.\n";
+}
+
+
+// ============================================================
+// check_outputs — 运行外部程序并与 .out 文件比对
+// ============================================================
+
+inline string casecraft_data_dir(const string &dir_hint = "") {
+    if (!dir_hint.empty()) return dir_hint;
+    if (!g_problem_id.empty()) return "Data/" + g_problem_id + "_Data";
+    return "data";
+}
+
+inline string shell_quote_path(const string &s) {
+#ifdef _WIN32
+    string r = "\"";
+    for (char c : s) {
+        if (c == '"') r += "\\\"";
+        else r += c;
+    }
+    r += "\"";
+    return r;
+#else
+    string r = "'";
+    for (char c : s) {
+        if (c == '\'') r += "'\\''";
+        else r += c;
+    }
+    r += "'";
+    return r;
+#endif
+}
+
+inline bool compare_files_tokenwise(const fs::path &expected,
+                                    const fs::path &actual,
+                                    string &message) {
+    ifstream fe(expected), fa(actual);
+    if (!fe) {
+        message = "cannot open expected file: " + expected.string();
+        return false;
+    }
+    if (!fa) {
+        message = "cannot open actual file: " + actual.string();
+        return false;
+    }
+
+    string e, a;
+    size_t token_id = 0;
+
+    while (true) {
+        bool has_e = static_cast<bool>(fe >> e);
+        bool has_a = static_cast<bool>(fa >> a);
+
+        if (!has_e && !has_a) {
+            message = "accepted";
+            return true;
+        }
+
+        ++token_id;
+
+        if (has_e != has_a) {
+            if (has_e) {
+                message = "missing output at token #" + to_string(token_id)
+                        + ", expected [" + e + "]";
+            } else {
+                message = "extra output at token #" + to_string(token_id)
+                        + ", got [" + a + "]";
+            }
+            return false;
+        }
+
+        if (e != a) {
+            message = "token #" + to_string(token_id)
+                    + " differs: expected [" + e + "], got [" + a + "]";
+            return false;
+        }
+    }
+}
+
+inline bool compare_files_exact(const fs::path &expected,
+                                const fs::path &actual,
+                                string &message) {
+    ifstream fe(expected, ios::binary), fa(actual, ios::binary);
+    if (!fe) {
+        message = "cannot open expected file: " + expected.string();
+        return false;
+    }
+    if (!fa) {
+        message = "cannot open actual file: " + actual.string();
+        return false;
+    }
+
+    char e, a;
+    size_t pos = 0;
+
+    while (true) {
+        bool has_e = static_cast<bool>(fe.get(e));
+        bool has_a = static_cast<bool>(fa.get(a));
+
+        if (!has_e && !has_a) {
+            message = "accepted";
+            return true;
+        }
+
+        if (has_e != has_a) {
+            message = "file length differs at byte #" + to_string(pos);
+            return false;
+        }
+
+        if (e != a) {
+            message = "byte #" + to_string(pos) + " differs";
+            return false;
+        }
+
+        ++pos;
+    }
+}
+
+// 返回失败数量；返回 0 表示全部通过。
+inline int check_outputs(const string &program_path,
+                         const string &dir_hint = "",
+                         bool strict = false) {
+    if (program_path.empty()) {
+        cerr << "Usage: ./gen check <program> [--strict]\n";
+        return 1;
+    }
+
+    string dir = casecraft_data_dir(dir_hint);
+
+    if (!fs::exists(dir)) {
+        cerr << "Directory not found: " << dir << '\n';
+        cerr << "Run without arguments first to generate input files.\n";
+        return 1;
+    }
+
+    vector<fs::path> in_files;
+    for (auto &entry : fs::directory_iterator(dir)) {
+        if (entry.path().extension() == ".in") {
+            in_files.push_back(entry.path());
+        }
+    }
+    sort(in_files.begin(), in_files.end());
+
+    if (in_files.empty()) {
+        cerr << "No .in files found in " << dir << '\n';
+        return 1;
+    }
+
+    int passed = 0;
+    int failed = 0;
+
+    for (auto &in_path : in_files) {
+        fs::path expected_path = in_path;
+        expected_path.replace_extension(".out");
+
+        if (!fs::exists(expected_path)) {
+            cerr << "[MISS] " << expected_path.filename()
+                 << " not found for " << in_path.filename() << '\n';
+            ++failed;
+            continue;
+        }
+
+        fs::path actual_path = in_path;
+        actual_path.replace_extension(".user.out");
+
+        fs::path err_path = in_path;
+        err_path.replace_extension(".user.err");
+
+        string cmd = shell_quote_path(program_path)
+                   + " < " + shell_quote_path(in_path.string())
+                   + " > " + shell_quote_path(actual_path.string())
+                   + " 2> " + shell_quote_path(err_path.string());
+
+        int code = system(cmd.c_str());
+        if (code != 0) {
+            cerr << "[RE] " << in_path.filename()
+                 << " program exited with code " << code << '\n';
+            cerr << "     stderr: " << err_path << '\n';
+            ++failed;
+            continue;
+        }
+
+        string message;
+        bool ok = strict
+            ? compare_files_exact(expected_path, actual_path, message)
+            : compare_files_tokenwise(expected_path, actual_path, message);
+
+        if (ok) {
+            cerr << "[AC] " << in_path.filename() << '\n';
+            ++passed;
+
+            error_code ec;
+            fs::remove(actual_path, ec);
+            fs::remove(err_path, ec);
+        } else {
+            cerr << "[WA] " << in_path.filename() << '\n';
+            cerr << "     " << message << '\n';
+            cerr << "     expected: " << expected_path << '\n';
+            cerr << "     actual:   " << actual_path << '\n';
+            cerr << "     stderr:   " << err_path << '\n';
+            ++failed;
+        }
+    }
+
+    cerr << "Check done! passed=" << passed
+         << ", failed=" << failed
+         << ", total=" << in_files.size() << '\n';
+
+    return failed;
 }
 
 // ============================================================

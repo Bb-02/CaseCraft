@@ -17,9 +17,19 @@ gen:
 run: gen
 	./gen $(SEED)
 
+# 生成 .out
+out: gen
+	./gen out $(SEED)
+
+# 对拍：make check SRC=sum.cpp SOL=main.cpp SEED=12345
+check:
+	$(CXX) $(CXXFLAGS) $(SRC) -o gen
+	$(CXX) $(CXXFLAGS) $(SOL) -o user_prog
+	./gen duipai ./user_prog $(SEED)
+
 # 清理所有生成数据
 clean:
-	rm -f gen gen_template gen_graph
+	rm -f gen gen_template gen_graph user_prog
 	rm -rf Data/*_Data
 
-.PHONY: template example gen run clean
+.PHONY: template example gen run out check clean

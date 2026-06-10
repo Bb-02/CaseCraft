@@ -6,9 +6,12 @@
 *.ilk
 gen
 gen_*
+user_prog
 
 # 生成的测试数据（本地运行产生，不上传）
 Data/*_Data/
+*.user.out
+*.user.err
 
 # IDE
 .vscode/

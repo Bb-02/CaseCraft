@@ -6,6 +6,7 @@
 
 - **造 `.in`**：用内置函数随机生成各种数据
 - **造 `.out`**：跑一遍标准题解，自动生成输出
+- **对拍检查**：自动把 `.in` 输入到你的程序，并和 `.out` 比对
 
 ---
 
@@ -89,6 +90,59 @@ g++ -std=c++17 -O2 sum.cpp -o gen
 ./gen out    # 读取 .in，跑 solve，生成 .out
 ./gen 12345  # 固定随机种子（让每次生成的数据一样）
 ```
+
+## 一键对拍 / 检查自己的程序
+
+假设：
+
+- 生成器文件是 `sum.cpp`
+- 待测程序是 `main.cpp`
+- `sum.cpp` 里的 `solve(istream&, ostream&)` 是标准题解
+
+先编译：
+
+```bash
+g++ -std=c++17 -O2 sum.cpp -o gen
+g++ -std=c++17 -O2 main.cpp -o my_program
+```
+
+一键完成“造输入 → 造标准输出 → 跑待测程序 → 比对输出”：
+
+```bash
+./gen duipai ./my_program 12345
+```
+
+也可以拆开跑：
+
+```bash
+./gen 12345
+./gen out
+./gen check ./my_program
+```
+
+默认按 token 比较，忽略空格、换行差异。
+
+如果需要严格逐字节比较：
+
+```bash
+./gen check ./my_program --strict
+```
+
+检查结果含义：
+
+- `[AC]`：该测试点通过
+- `[WA]`：输出不一致
+- `[RE]`：待测程序运行失败或返回非 0
+- `[MISS]`：找不到对应的 `.out` 标准输出文件
+
+如果某个测试点错误，会保留这些文件方便调试：
+
+```text
+001.user.out  # 待测程序输出
+001.user.err  # 待测程序 stderr
+```
+
+命令返回值：所有测试点通过时返回 `0`，只要有失败就返回非 `0`，所以可以接入 CI。
 
 ---
 
@@ -267,6 +321,20 @@ gen_output(solve);
 void solve(istream &in, ostream &out) {
     // in 当 cin 用，out 当 cout 用
 }
+```
+
+## check_outputs — 对拍检查
+
+```cpp
+check_outputs("./my_program");           // token 比较
+check_outputs("./my_program", "", true); // 严格逐字节比较
+```
+
+通常不需要直接调用这个函数，直接使用命令行即可：
+
+```bash
+./gen check ./my_program
+./gen duipai ./my_program 12345
 ```
 
 ---

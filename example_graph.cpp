@@ -1,8 +1,10 @@
 /**
  * example_graph.cpp — 完整示例：最短路径题目的输入+输出数据生成
  *
- * 生成输入：./gen_graph
- * 生成输出：./gen_graph out
+ * 生成输入：./gen_graph [seed]
+ * 生成输出：./gen_graph out [seed]
+ * 检查程序：./gen_graph check ./my_program
+ * 一键对拍：./gen_graph duipai ./my_program [seed]
  */
 
 #include "gen_lib.h"
@@ -87,24 +89,73 @@ void solve(istream &in, ostream &out) {
 }
 
 // ============================================================
+void print_usage(const char *prog) {
+    cerr << "Usage:\n";
+    cerr << "  " << prog << " [seed]                         Generate .in files\n";
+    cerr << "  " << prog << " out [seed]                     Generate .out files\n";
+    cerr << "  " << prog << " check <program> [--strict]     Run program and compare with .out\n";
+    cerr << "  " << prog << " duipai <program> [seed] [--strict]\n";
+}
+
 int main(int argc, char *argv[]) {
-    bool out_mode = false;
+    string mode = "in";
+    string program_path;
     uint64_t seed = 0;
     bool seed_set = false;
+    bool strict = false;
 
     for (int i = 1; i < argc; i++) {
         string arg = argv[i];
-        if (arg == "out") out_mode = true;
-        else seed = stoull(arg), seed_set = true;
+
+        if (arg == "out") {
+            mode = "out";
+        } else if (arg == "check") {
+            mode = "check";
+            if (i + 1 >= argc) {
+                print_usage(argv[0]);
+                return 1;
+            }
+            program_path = argv[++i];
+        } else if (arg == "duipai" || arg == "test") {
+            mode = "duipai";
+            if (i + 1 >= argc) {
+                print_usage(argv[0]);
+                return 1;
+            }
+            program_path = argv[++i];
+        } else if (arg == "--strict") {
+            strict = true;
+        } else {
+            try {
+                seed = stoull(arg);
+                seed_set = true;
+            } catch (...) {
+                cerr << "Unknown argument: " << arg << '\n';
+                print_usage(argv[0]);
+                return 1;
+            }
+        }
     }
 
-    rnd = new Random(seed_set ? seed : 0);
+    rnd = seed_set ? new Random(seed) : new Random();
+
     cerr << "Problem: " << g_problem_id << '\n';
     if (seed_set) cerr << "Seed: " << seed << '\n';
 
-    if (out_mode) gen_output(solve);
-    else generate_input();
+    int failed = 0;
+
+    if (mode == "out") {
+        gen_output(solve);
+    } else if (mode == "check") {
+        failed = check_outputs(program_path, "", strict);
+    } else if (mode == "duipai") {
+        generate_input();
+        gen_output(solve);
+        failed = check_outputs(program_path, "", strict);
+    } else {
+        generate_input();
+    }
 
     delete rnd;
-    return 0;
+    return failed == 0 ? 0 : 1;
 }

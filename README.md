@@ -92,7 +92,7 @@ g++ -std=c++17 -O2 sum.cpp -o gen
 # 目录结构
 
 ```
-Create_Data/
+CaseCraft/
 ├── gen_lib.h           ← 核心库（不需要动）
 ├── template.cpp        ← 模板，复制这个开始写新题
 ├── example_graph.cpp   ← 完整示例（最短路径）

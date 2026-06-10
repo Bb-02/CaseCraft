@@ -1,16 +1,11 @@
 /**
- * template.cpp — 数据生成模板（输入 + 输出）
+ * template.cpp — 数据生成模板
  *
  * 用法：
- *   1. 改 g_problem_id
- *   2. 写 generate_input()   — 造输入数据
- *   3. 写 solve(in, out)     — 题解代码
- *   4. 编译：g++ -std=c++17 -O2 template.cpp -o gen
- *   5. 生成输入：./gen [seed]
- *   6. 生成输出：./gen out
+ *   生成输入数据：./gen [seed]
+ *   生成输出数据：./gen out
  *
- * 输入文件 -> Data/{id}_Data/001.in, 002.in ...
- * 输出文件 -> Data/{id}_Data/001.out, 002.out ...
+ * 数据输出到：Data/{g_problem_id}_Data/
  */
 
 #include "gen_lib.h"
@@ -22,34 +17,73 @@ using namespace std;
 string g_problem_id = "my_problem";
 
 // ============================================================
-// ★ 步骤 1：造输入数据 (.in 文件)
+// ★ 步骤 1：造输入数据 (.in)
 // ============================================================
 void generate_input() {
-    DataWriter dw; // 001.in, 002.in, 003.in ...
+    DataWriter dw; // 不加参数 → 文件名为 001.in, 002.in ...
 
-    // --- 第 1 组：样例 ---
+    // ------ 示例 1：简单的一行数据 ------
     dw.next([](ostream &o) {
-        o << "3 5\n";
-        o << "1 2 3\n";
+        o << "1 2\n";           // 就写一行
     });
 
-    // --- 小数据 ---
-    for (int i = 0; i < 3; i++) {
-        dw.next([&](ostream &o) {
-            int n = rnd->next(1, 10);
-            int m = rnd->next(1, 10);
-            o << n << ' ' << m << '\n';
-            print_vec(o, gen_array(n, 1, 100));
-        });
-    }
+    // ------ 示例 2：n + n个数 ------
+    dw.next([](ostream &o) {
+        int n = rnd->next(1, 10);    // n 是 1~10 的随机数
+        o << n << '\n';               // 第一行：n
+        auto a = gen_array(n, 1, 100);// 生成 n 个 [1,100] 的数
+        print_vec(o, a);              // 第二行：a1 a2 ... an
+    });
 
-    // --- 极限数据 ---
-    for (int i = 0; i < 3; i++) {
-        dw.next([&](ostream &o) {
-            int n = 100000;
-            int m = rnd->next(1, 1'000'000'000);
-            o << n << ' ' << m << '\n';
-            print_vec(o, gen_array(n, 1, 1'000'000'000));
+    // ------ 示例 3：n + n个数，带负数 ------
+    dw.next([](ostream &o) {
+        int n = rnd->next(5, 20);
+        o << n << '\n';
+        auto a = gen_array(n, -1000, 1000); // [-1000, 1000]，有正有负
+        print_vec(o, a);
+    });
+
+    // ------ 示例 4：浮点数 ------
+    dw.next([](ostream &o) {
+        int n = 5;
+        o << n << '\n';
+        auto f = gen_real_array(n, -1.0, 1.0); // 5 个 [-1.0, 1.0) 的浮点数
+        print_real_vec(o, f, 6);               // 保留 6 位小数输出
+    });
+
+    // ------ 示例 5：排列（1~n 随机打乱） ------
+    dw.next([](ostream &o) {
+        int n = 8;
+        o << n << '\n';
+        auto p = gen_permutation(n); // 1..n 的随机排列
+        print_vec(o, p);
+    });
+
+    // ------ 示例 6：一个文件里多组询问 ------
+    dw.next([](ostream &o) {
+        int t = rnd->next(3, 8); // 询问组数
+        o << t << '\n';
+        while (t--) {
+            int l = rnd->next(1, 50);
+            int r = rnd->next(l, 100);
+            o << l << ' ' << r << '\n';
+        }
+    });
+
+    // ------ 示例 7：树 ------
+    dw.next([](ostream &o) {
+        int n = 10;
+        o << n << '\n';
+        auto edges = gen_tree_prufer(n); // 随机树
+        print_edges(o, edges);           // 每行 "u v"
+    });
+
+    // ------ 示例 8：循环批量生成 ------
+    for (int i = 0; i < 5; i++) {
+        dw.next([&](ostream &o) { // [&] 捕获外层的 i
+            int n = rnd->next(100, 500);
+            o << n << '\n';
+            print_vec(o, gen_array(n, 1, 1'000'000));
         });
     }
 
@@ -58,53 +92,33 @@ void generate_input() {
 }
 
 // ============================================================
-// ★ 步骤 2：题解代码（读入 -> 计算 -> 输出答案）
+// ★ 步骤 2：题解代码（in = 输入流，out = 输出流）
 // ============================================================
 void solve(istream &in, ostream &out) {
-    // 示例：求数组和（换成你真正的题解）
-    int n;
-    long long m;
-    in >> n >> m;
-
-    long long sum = 0;
-    for (int i = 0; i < n; i++) {
-        long long x;
-        in >> x;
-        sum += x;
-    }
-
-    // 输出答案
-    out << sum % m << '\n';
+    // 示例：读两个数，输出和（换成你真正的题解）
+    int a, b;
+    in >> a >> b;
+    out << a + b << '\n';
 }
 
 // ============================================================
 int main(int argc, char *argv[]) {
-    // 判断模式：./gen out  -> 生成输出；其他 -> 生成输入
     bool out_mode = false;
     uint64_t seed = 0;
     bool seed_set = false;
 
     for (int i = 1; i < argc; i++) {
         string arg = argv[i];
-        if (arg == "out") {
-            out_mode = true;
-        } else {
-            seed = stoull(arg);
-            seed_set = true;
-        }
+        if (arg == "out") out_mode = true;
+        else seed = stoull(arg), seed_set = true;
     }
 
     rnd = new Random(seed_set ? seed : 0);
     cerr << "Problem: " << g_problem_id << '\n';
     if (seed_set) cerr << "Seed: " << seed << '\n';
 
-    if (out_mode) {
-        // 生成输出：读取 .in 文件，运行题解，写出 .out
-        gen_output(solve);
-    } else {
-        // 生成输入
-        generate_input();
-    }
+    if (out_mode) gen_output(solve);
+    else generate_input();
 
     delete rnd;
     return 0;

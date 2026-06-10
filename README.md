@@ -1,107 +1,78 @@
-# 算法题数据生成框架
+# 算法题数据生成框架 — 使用手册
 
-## 这玩意干嘛的？
+## 这玩意干嘛的
 
-写算法题的时候，你需要造测试数据（输入文件 `.in` 和输出文件 `.out`）。这个框架帮你干两件事：
+写算法题需要 `.in`（输入）和 `.out`（输出）文件。这个框架让你：
 
-1. **造输入数据** — 随机生成各种规模、各种结构的 `.in` 文件
-2. **造输出数据** — 读入 `.in`，跑一遍标准题解，生成对应的 `.out` 文件
-
-## 目录长这样
-
-```
-Create_Data/
-├── gen_lib.h              ← 核心库（不用改）
-├── template.cpp           ← 模板（复制这个开始写新题）
-├── example_graph.cpp      ← 完整示例
-├── README.md              ← 你在看的这个
-└── Data/                  ← 所有题目的数据都在这
-    ├── sum_Data/          ← 题目 "sum" 的数据
-    │   ├── 001.in
-    │   ├── 001.out
-    │   ├── 002.in
-    │   ├── 002.out
-    │   └── ...
-    └── shortest_path_Data/ ← 题目 "shortest_path" 的数据
-        ├── 001.in
-        ├── 001.out
-        └── ...
-```
+- **造 `.in`**：用内置函数随机生成各种数据
+- **造 `.out`**：跑一遍标准题解，自动生成输出
 
 ---
 
-# 快速开始（5 分钟上手）
+# 5 分钟快速上手
 
 ## 第 1 步：复制模板
 
-```bash
-cp template.cpp my_problem.cpp
-```
+复制 `template.cpp` → 重命名为你的题目的名字（比如 `sum.cpp`）
 
 ## 第 2 步：改题目 ID
 
-打开 `my_problem.cpp`，找到这一行：
+打开文件，找到第一行能改的代码：
 
 ```cpp
-string g_problem_id = "my_problem";  // 改成你的题目名，比如 "sum"、"tree" 等
+string g_problem_id = "sum"; // 改这里
 ```
 
-**这个 ID 决定了数据存到哪个文件夹。** 比如你写 `"sum"`，数据就去 `Data/sum_Data/`。
+**这个 ID 决定数据存到哪。** 改成 `"sum"`，数据就去 `Data/sum_Data/`。
 
-## 第 3 步：写造输入数据的代码
+## 第 3 步：写造数据代码
 
-在 `generate_input()` 函数里写：
+在 `generate_input()` 里面写：
 
 ```cpp
 void generate_input() {
-    DataWriter dw; // 自动创建 Data/sum_Data/ 目录
+    DataWriter dw; // 生成 001.in, 002.in, 003.in ...
 
-    // 每调用一次 dw.next(...) = 生成一个 .in 文件
-    // o 就是文件流，当成 cout 用就行
+    // 手写一组样例
     dw.next([](ostream &o) {
-        o << "3 5\n";                  // 第一行：n m
-        o << "1 2 3\n";               // 第二行：数组
+        o << "3 7\n";            // n=3, m=7
+        o << "1 2 3\n";
     });
-    // ↑ 这个生成 001.in
 
+    // 用随机函数生成
     dw.next([](ostream &o) {
-        int n = 10;
+        int n = rnd->next(5, 20);      // n = 5~20 随机
         o << n << '\n';
-        auto arr = gen_array(n, 1, 100);  // 10 个 [1,100] 的随机数
-        print_vec(o, arr);                 // 输出到文件
+        auto a = gen_array(n, 1, 100); // n 个 1~100 的随机数
+        print_vec(o, a);               // 输出到文件
     });
-    // ↑ 这个生成 002.in
 
-    // 用循环批量生成
-    for (int i = 0; i < 5; i++) {
+    // 批量生成 10 组大数据
+    for (int i = 0; i < 10; i++) {
         dw.next([&](ostream &o) {
-            int n = rnd->next(10, 100);     // 随机 10~100
+            int n = 100000;
             o << n << '\n';
-            print_vec(o, gen_array(n, 1, 1'000'000));
+            print_vec(o, gen_array(n, 1, 1e9));
         });
     }
-    // ↑ 生成 003.in ~ 007.in
 }
 ```
 
-## 第 4 步：写题解代码
+## 第 4 步：写题解
 
-在 `solve()` 函数里写：
+在 `solve()` 里面写：
 
 ```cpp
 void solve(istream &in, ostream &out) {
-    // 从 in 读入（当成 cin 用）
+    // in = 输入流（当成 cin 用）
+    // out = 输出流（当成 cout 用）
     int n, m;
     in >> n >> m;
-
     long long sum = 0;
     for (int i = 0; i < n; i++) {
-        long long x;
-        in >> x;
+        long long x; in >> x;
         sum += x;
     }
-
-    // 输出答案到 out（当成 cout 用）
     out << sum % m << '\n';
 }
 ```
@@ -109,257 +80,255 @@ void solve(istream &in, ostream &out) {
 ## 第 5 步：编译运行
 
 ```bash
-# 编译
-g++ -std=c++17 -O2 my_problem.cpp -o gen
+g++ -std=c++17 -O2 sum.cpp -o gen
 
-# 生成输入数据（.in 文件）
-./gen
-
-# 生成输出数据（读 .in + 跑题解 → .out 文件）
-./gen out
-
-# 固定随机种子（让数据可复现）
-./gen 12345
+./gen        # 生成 Data/sum_Data/001.in, 002.in ...
+./gen out    # 读取 .in，跑 solve，生成 .out
+./gen 12345  # 固定随机种子（让每次生成的数据一样）
 ```
 
 ---
 
-# 核心概念详解
+# 目录结构
 
-## DataWriter — 怎么写 .in 文件
-
-```cpp
-DataWriter dw;              // 文件名叫 001.in, 002.in, 003.in ...
-DataWriter dw("in");        // 文件名叫 in_001.in, in_002.in ...
-DataWriter dw("in", "ans"); // 文件名叫 in_001.ans, in_002.ans ...
+```
+Create_Data/
+├── gen_lib.h           ← 核心库（不需要动）
+├── template.cpp        ← 模板，复制这个开始写新题
+├── example_graph.cpp   ← 完整示例（最短路径）
+├── README.md           ← 本文
+└── Data/               ← 所有数据
+    ├── sum_Data/       ← sum 题的数据
+    │   ├── 001.in
+    │   ├── 001.out
+    │   ├── 002.in
+    │   └── 002.out
+    └── tree_Data/      ← tree 题的数据
+        └── ...
 ```
 
-**写数据只有一种方式：`dw.next( lambda )`**
+---
+
+# 函数速查表
+
+## 随机数引擎 — `rnd`
+
+全局变量，直接用。
+
+| 函数 | 说明 | 示例 |
+|------|------|------|
+| `rnd->next(l, r)` | 整数 ∈ [l, r]，支持**负数**、**long long** | `rnd->next(-1e18, 1e18)` |
+| `rnd->next(r)` | 整数 ∈ [0, r] | `rnd->next(100)` → 0~100 |
+| `rnd->next_n(n)` | 整数 ∈ [0, n) | `rnd->next_n(5)` → 0~4 |
+| `rnd->next_double()` | 浮点数 ∈ [0.0, 1.0) | `rnd->next_double()` → 0.573... |
+| `rnd->next_double(l, r)` | 浮点数 ∈ [l, r) | `rnd->next_double(-1.5, 3.0)` |
+| `rnd->chance(p)` | 以概率 p 返回 true | `rnd->chance(0.3)` → 30% 概率 |
+| `rnd->shuffle(v)` | 原地打乱 vector | `rnd->shuffle(a)` |
+| `rnd->pick(v)` | 随机选一个元素 | `rnd->pick(v)` → 返回 v 中某个元素 |
+| `rnd->sample(v, k)` | 不放回挑 k 个 | `rnd->sample(v, 3)` → 返回 3 个 |
+| `rnd->distinct(k, l, r)` | [l,r] 中取 k 个不重复整数 | `rnd->distinct(5, 1, 100)` → 5 个不同的数 |
+
+---
+
+## 数组生成器
+
+| 函数 | 说明 | 示例 |
+|------|------|------|
+| `gen_array(n, l, r)` | n 个 ∈ [l, r] 的随机整数 | `gen_array(10, -100, 100)` |
+| `gen_real_array(n, l, r)` | n 个 ∈ [l, r) 的随机浮点数 | `gen_real_array(5, 0.0, 1.0)` |
+| `gen_array_same(n, val)` | n 个全是 val | `gen_array_same(100, 42)` |
+| `gen_sorted_array(n, l, r)` | 非降序数组 | `gen_sorted_array(10, 1, 100)` |
+| `gen_strictly_increasing(n, l, r)` | 严格递增（无重复） | `gen_strictly_increasing(10, 1, 100)` |
+
+---
+
+## 排列生成器
+
+| 函数 | 说明 | 示例 |
+|------|------|------|
+| `gen_permutation(n)` | 1..n 随机打乱 | `gen_permutation(10)` → `[3,7,1,5,...]` |
+| `gen_permutation_reverse(n)` | 完全逆序 | `gen_permutation_reverse(5)` → `[5,4,3,2,1]` |
+| `gen_permutation_almost_sorted(n, k)` | 几乎有序（做 k 次随机交换） | `gen_permutation_almost_sorted(100, 3)` |
+| `gen_permutation_half_shuffle(n)` | 前一半和后一半各自打乱 | `gen_permutation_half_shuffle(10)` |
+
+---
+
+## 字符串生成器
+
+| 函数 | 说明 | 示例 |
+|------|------|------|
+| `gen_string(n)` | 长度 n 的随机小写字母串 | `gen_string(10)` → `"ahfjkqwepz"` |
+| `gen_string(n, charset)` | 指定字符集 | `gen_string(5, "ACGT")` → `"GATCA"` |
+| `gen_string(n, "01")` | 随机 01 串 | `gen_string(8, "01")` → `"01101001"` |
+| `gen_palindrome(n)` | 长度 n 的随机回文串 | `gen_palindrome(5)` → `"abcba"` |
+| `gen_string_distinct(n)` | 长度 n 的全不同小写字母 | `gen_string_distinct(5)` → `"kfxap"` |
+
+---
+
+## 树生成器
+
+返回 `vector<pair<int, int>>`，每条边 `u < v`。
+
+| 函数 | 说明 |
+|------|------|
+| `gen_tree_prufer(n)` | 完全随机树（均匀分布） |
+| `gen_tree_star(n)` | 菊花树（1 为中心） |
+| `gen_tree_chain(n)` | 链（1-2-3-...-n） |
+| `gen_tree_deg_capped(n, d)` | 每个节点度数 ≤ d 的随机树 |
+| `gen_tree_binary(n)` | 随机二叉树（每个节点最多 2 子） |
+
+使用示例：
+
+```cpp
+auto edges = gen_tree_prufer(10); // 10 个节点的随机树
+print_edges(o, edges);            // 输出到文件，每行 "u v"
+```
+
+---
+
+## 图生成器
+
+返回 `vector<pair<int, int>>`，每条边 `u < v`。
+
+| 函数 | 说明 |
+|------|------|
+| `gen_graph_connected(n, m)` | n 节点 m 边的连通无向图 |
+| `gen_dag(n, m)` | n 节点 m 边的有向无环图 |
+| `gen_graph_complete(n)` | n 节点的完全图 |
+| `gen_graph_bipartite(n1, n2, m)` | 二分图：左 n1 右 n2 节点，m 条边 |
+
+---
+
+## 其他生成器
+
+| 函数 | 说明 |
+|------|------|
+| `gen_partition(n, k)` | 把 n 随机分成 k 个正整数的和 |
+
+---
+
+## 输出函数
+
+| 函数 | 说明 | 示例 |
+|------|------|------|
+| `print_vec(o, v)` | 输出 vector 到 ostream | `print_vec(o, a)` 空格分隔，末尾换行 |
+| `print_vec(o, v, "\n")` | 换行分隔 | `print_vec(o, a, "\n")` |
+| `print_vec(v)` | 输出到屏幕（调试） | `print_vec(a)` |
+| `print_real_vec(o, v, p)` | 输出浮点 vector，p 位小数 | `print_real_vec(o, f, 6)` |
+| `print_edges(o, e)` | 输出边集 | `print_edges(o, edges)` |
+| `println(args...)` | 输出到屏幕 | `println("n =", n)` |
+
+---
+
+## DataWriter — 写 .in 文件
+
+```cpp
+DataWriter dw;              // 001.in, 002.in, 003.in ...
+DataWriter dw("in");        // in_001.in, in_002.in ...
+DataWriter dw("in", "out"); // in_001.out, in_002.out ...（自定义后缀）
+```
+
+**写数据只有一种方式：**
 
 ```cpp
 dw.next([](ostream &o) {
-    // o 就是文件流，用 << 往里写
-    o << "hello world\n";
-    o << 42 << ' ' << 99 << '\n';
+    o << "内容\n";
+    print_vec(o, gen_array(10, 1, 100));
 });
 ```
 
-lambda 里可以用 `[&]` 捕获外面的变量：
+lambda 用 `[&]` 捕获外面的变量：
 
 ```cpp
 int n = rnd->next(1, 100);
-dw.next([&](ostream &o) {   // [&] 让 lambda 能访问 n
+dw.next([&](ostream &o) {
     o << n << '\n';
 });
 ```
 
-## print_vec — 输出数组的一行
-
-```cpp
-// 输出到文件流 o
-print_vec(o, arr);          // 空格分隔：1 2 3 4 5
-print_vec(o, arr, "\n");    // 换行分隔：1\n2\n3\n4\n5
-
-// 输出到屏幕（调试用）
-print_vec(arr);
-```
-
-## println — 输出一行到屏幕
-
-```cpp
-println("hello");              // hello
-println("n =", n, "m =", m);   // n = 5 m = 10
-println();                     // 空行
-```
+**`dw.counter`** 是已生成的文件数量。
 
 ---
 
-# 随机数引擎
-
-全局变量 `rnd` 就是随机数引擎，直接用。
-
-| 函数 | 说明 | 示例 |
-|------|------|------|
-| `rnd->next(l, r)` | [l, r] 区间随机整数 | `rnd->next(1, 100)` → 1~100 |
-| `rnd->next(r)` | [0, r] 区间随机整数 | `rnd->next(100)` → 0~100 |
-| `rnd->next_n(n)` | [0, n) 区间随机整数 | `rnd->next(5)` → 0~4 |
-| `rnd->next_real()` | [0, 1) 随机浮点数 | |
-| `rnd->chance(p)` | 以概率 p 返回 true | `rnd->chance(0.3)` → 30% 概率 |
-| `rnd->shuffle(v)` | 原地打乱数组 | |
-| `rnd->pick(v)` | 随机选一个元素 | `rnd->pick(v)` |
-| `rnd->sample(v, k)` | 不放回选 k 个 | `rnd->sample(v, 3)` |
-| `rnd->distinct(k, l, r)` | [l,r] 中取 k 个不同的数 | `rnd->distinct(5, 1, 100)` |
-
----
-
-# 内置生成器
-
-## 数组
+## gen_output — 生成 .out 文件
 
 ```cpp
-// n 个 [l, r] 的随机数
-auto a = gen_array(n, l, r);
-
-// 1~n 的随机排列
-auto p = gen_permutation(n);
-
-// 非降序数组
-auto a = gen_sorted_array(n, l, r);
-
-// 将 n 分成 k 个正整数（每份大小随机，和 = n）
-auto parts = gen_partition(n, k);
-```
-
-## 字符串
-
-```cpp
-// 长度为 n 的随机小写字母串
-string s = gen_string(n);
-
-// 长度为 n，字符来自指定字符集
-string s = gen_string(n, "ACGT");  // 只含 A C G T
-string s = gen_string(n, "01");    // 随机 01 串
-```
-
-## 树
-
-```cpp
-// 完全随机树（Prufer 序列，n 个节点）
-auto edges = gen_tree_prufer(n);
-
-// 菊花树（1 号节点是中心）
-auto edges = gen_tree_star(n);
-
-// 链
-auto edges = gen_tree_chain(n);
-
-// 每个节点度数不超过 d 的随机树
-auto edges = gen_tree_deg_capped(n, d);
-```
-
-树的返回值是 `vector<pair<int, int>>`，每条边 `u < v`。
-
-输出到文件：
-```cpp
-auto edges = gen_tree_prufer(n);
-print_edges(o, edges); // 每行输出 "u v"
-```
-
-## 图
-
-```cpp
-// n 个节点 m 条边的连通无向图
-auto edges = gen_graph_connected(n, m);
-
-// n 个节点 m 条边的有向无环图
-auto edges = gen_dag(n, m);
-```
-
----
-
-# gen_output — 生成 .out 文件
-
-```cpp
-// 写一个 solve 函数
-void solve(istream &in, ostream &out) {
-    // in 当成 cin，out 当成 cout
-    int n; in >> n;
-    vector<int> a(n);
-    for (int i = 0; i < n; i++) in >> a[i];
-
-    // ... 你的题解 ...
-
-    out << ans << '\n';
-}
-```
-
-然后：
-
-```cpp
-// 自动扫描 Data/{id}_Data/ 下所有 .in 文件
-// 逐个读入、跑 solve、写出 .out
 gen_output(solve);
 ```
 
-它会：
-1. 找到所有 `.in` 文件（按文件名排序）
-2. 对每个 `001.in` → 读入 → `solve(...)` → 写出 `001.out`
-3. 在终端打印进度
+自动扫描 `Data/{id}_Data/` 下所有 `.in` 文件，逐个读入 → 跑 `solve(in, out)` → 写出 `.out`。
 
----
-
-# 实战：从零写一个 A+B 的数据
+`solve` 签名固定为：
 
 ```cpp
-#include "gen_lib.h"
-using namespace std;
-
-string g_problem_id = "aplusb";
-
-void generate_input() {
-    DataWriter dw;
-
-    // 样例
-    dw.next([](ostream &o) { o << "1 2\n"; });
-
-    // 随机 10 组
-    for (int i = 0; i < 10; i++) {
-        dw.next([&](ostream &o) {
-            int a = rnd->next(-100, 100);
-            int b = rnd->next(-100, 100);
-            o << a << ' ' << b << '\n';
-        });
-    }
-}
-
 void solve(istream &in, ostream &out) {
-    int a, b;
-    in >> a >> b;
-    out << a + b << '\n';
+    // in 当 cin 用，out 当 cout 用
 }
-
-int main(int argc, char *argv[]) {
-    bool out_mode = false;
-    uint64_t seed = 0;
-    bool seed_set = false;
-    for (int i = 1; i < argc; i++) {
-        string arg = argv[i];
-        if (arg == "out") out_mode = true;
-        else seed = stoull(arg), seed_set = true;
-    }
-    rnd = new Random(seed_set ? seed : 0);
-    if (out_mode) gen_output(solve);
-    else generate_input();
-    delete rnd;
-    return 0;
-}
-```
-
-编译运行：
-
-```bash
-g++ -std=c++17 -O2 aplusb.cpp -o gen
-./gen        # 生成 Data/aplusb_Data/001.in ~ 011.in
-./gen out    # 生成 Data/aplusb_Data/001.out ~ 011.out
 ```
 
 ---
 
-# 常用技巧
+# 常见用法集锦
 
-## 让数据可复现
-
-```bash
-./gen 12345       # 用种子 12345 生成输入
-./gen 12345 out   # 用同样的种子生成输出（如果输出也用了随机的话无所谓）
-```
-
-## 写一个文件多组询问
+## 造极端数据
 
 ```cpp
-dw.next([&](ostream &o) {
+// 全是 1
+dw.next([](ostream &o) {
+    int n = 100000;
+    o << n << '\n';
+    print_vec(o, gen_array_same(n, 1));
+});
+
+// 严格递增
+dw.next([](ostream &o) {
+    int n = 100000;
+    o << n << '\n';
+    print_vec(o, gen_strictly_increasing(n, 1, 1'000'000'000));
+});
+
+// 完全逆序排列
+dw.next([](ostream &o) {
+    int n = 100000;
+    o << n << '\n';
+    print_vec(o, gen_permutation_reverse(n));
+});
+```
+
+## 造带权树
+
+```cpp
+dw.next([](ostream &o) {
+    int n = 100;
+    o << n << '\n';
+    auto edges = gen_tree_prufer(n);
+    for (auto [u, v] : edges) {
+        int w = rnd->next(1, 1000); // 随机边权
+        o << u << ' ' << v << ' ' << w << '\n';
+    }
+});
+```
+
+## 造 DAG + 边权
+
+```cpp
+dw.next([](ostream &o) {
+    int n = 100, m = 300;
+    auto edges = gen_dag(n, m);
+    o << n << ' ' << m << '\n';
+    for (auto [u, v] : edges) {
+        int w = rnd->next(-100, 100); // 边权可正可负
+        o << u << ' ' << v << ' ' << w << '\n';
+    }
+});
+```
+
+## 一个文件里多组询问
+
+```cpp
+dw.next([](ostream &o) {
     int t = rnd->next(1, 10);
-    o << t << '\n';                    // T 组询问
+    o << t << '\n';
     while (t--) {
         int n = rnd->next(1, 100);
         o << n << '\n';
@@ -368,26 +337,7 @@ dw.next([&](ostream &o) {
 });
 ```
 
-## 造极端数据
-
-```cpp
-// 全是一样的数
-dw.next([](ostream &o) {
-    int n = 100000;
-    o << n << '\n';
-    for (int i = 0; i < n; i++) {
-        if (i) o << ' ';
-        o << 1;
-    }
-    o << '\n';
-});
-
-// 递增/递减
-auto a = gen_sorted_array(n, 1, 1'000'000'000);  // 递增
-reverse(a.begin(), a.end());                       // 递减
-```
-
-## 不同规模的数据用 TestCase 管理
+## 多个规模的数据用 TestCase 管理
 
 ```cpp
 vector<TestCase> cases = {
@@ -396,20 +346,40 @@ vector<TestCase> cases = {
     {"medium",  1000, 10000,  100000},
     {"large",   100000, 500000, 1'000'000'000LL},
 };
-
 for (auto &tc : cases) {
-    // tc.n, tc.m, tc.max_val 就是这组数据的参数
-    dw.next([&](ostream &o) { ... });
+    dw.next([&](ostream &o) {
+        o << tc.n << ' ' << tc.m << ' ' << tc.max_val << '\n';
+        // ...
+    });
 }
+```
+
+## 固定种子让数据可复现
+
+```bash
+./gen 2024       # 用种子 2024 生成 → 每次跑出来的数据一模一样
+./gen 2024 out   # 同样种子生成输出
 ```
 
 ---
 
-# 命令行参考
+# 命令行参数
 
 | 命令 | 效果 |
 |------|------|
-| `./gen` | 生成输入数据（随机种子） |
-| `./gen 12345` | 生成输入数据（种子=12345，可复现） |
-| `./gen out` | 生成输出数据 |
-| `./gen 12345 out` | 生成输出数据（指定种子） |
+| `./gen` | 生成输入（随机种子） |
+| `./gen 12345` | 生成输入（种子=12345，可复现） |
+| `./gen out` | 生成输出 |
+| `./gen 12345 out` | 生成输出（指定种子） |
+
+---
+
+# 添加新题目 checklist
+
+1. `cp template.cpp xxx.cpp`
+2. 修改 `g_problem_id = "xxx"`
+3. 写 `generate_input()` — 用 `dw.next()` 和 `gen_xxx()` 造数据
+4. 写 `solve(istream&, ostream&)` — 题解
+5. `g++ -std=c++17 -O2 xxx.cpp -o gen`
+6. `./gen` 生成输入，`./gen out` 生成输出
+7. 检查 `Data/xxx_Data/` 目录下的 `.in` 和 `.out`

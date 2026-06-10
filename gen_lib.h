@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 /**
  * gen_lib.h — 算法题数据生成核心库
  *
@@ -96,10 +96,16 @@ struct Random {
         std::shuffle(v.begin(), v.end(), engine);
     }
 
-    // 随机挑选一个元素
+    // 随机挑选一个元素（vector 版本）
     template <typename T> const T &pick(const vector<T> &v) {
         assert(!v.empty());
         return v[next_n(v.size())];
+    }
+
+    // 随机挑选一个字符（string 版本）
+    char pick(const string &s) {
+        assert(!s.empty());
+        return s[next_n(s.size())];
     }
 
     // 不放回地挑选 k 个元素

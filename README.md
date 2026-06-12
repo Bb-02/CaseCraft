@@ -130,6 +130,9 @@ CaseCraft/
 | `rnd->pick(v)` | 随机选一个元素 | `rnd->pick(v)` → 返回 v 中某个元素 |
 | `rnd->sample(v, k)` | 不放回挑 k 个 | `rnd->sample(v, 3)` → 返回 3 个 |
 | `rnd->distinct(k, l, r)` | [l,r] 中取 k 个不重复整数 | `rnd->distinct(5, 1, 100)` → 5 个不同的数 |
+| `rnd->next_even(l, r)` | 随机偶数 ∈ [l, r] | `rnd->next_even(0, 100)` → 0~100 间的偶数 |
+| `rnd->next_odd(l, r)` | 随机奇数 ∈ [l, r] | `rnd->next_odd(-99, 99)` → -99~99 间的奇数 |
+| `rnd->next_multiple(l, r, k)` | 随机 k 的倍数 ∈ [l, r] | `rnd->next_multiple(1, 100, 7)` → 7 的倍数 |
 
 ---
 
@@ -142,6 +145,7 @@ CaseCraft/
 | `gen_array_same(n, val)` | n 个全是 val | `gen_array_same(100, 42)` |
 | `gen_sorted_array(n, l, r)` | 非降序数组 | `gen_sorted_array(10, 1, 100)` |
 | `gen_strictly_increasing(n, l, r)` | 严格递增（无重复） | `gen_strictly_increasing(10, 1, 100)` |
+| `gen_array_unique(n, l, r)` | 不重复随机数组（未排序） | `gen_array_unique(10, 1, 100)` |
 
 ---
 
@@ -179,12 +183,18 @@ CaseCraft/
 | `gen_tree_chain(n)` | 链（1-2-3-...-n） |
 | `gen_tree_deg_capped(n, d)` | 每个节点度数 ≤ d 的随机树 |
 | `gen_tree_binary(n)` | 随机二叉树（每个节点最多 2 子） |
+| `gen_parent_array(n)` | 有根树(1为根)的父节点数组，返回 p[2..n] |
 
 使用示例：
 
 ```cpp
 auto edges = gen_tree_prufer(10); // 10 个节点的随机树
 print_edges(o, edges);            // 输出到文件，每行 "u v"
+
+// 另一种常见格式：父节点数组（很多树的题用这种格式）
+auto p = gen_parent_array(10);    // p[0]=节点2的父节点, p[1]=节点3的父节点, ...
+for (int i = 2; i <= 10; i++)
+    cout << p[i - 2] << " \n"[i == 10];
 ```
 
 ---
@@ -199,6 +209,7 @@ print_edges(o, edges);            // 输出到文件，每行 "u v"
 | `gen_dag(n, m)` | n 节点 m 边的有向无环图 |
 | `gen_graph_complete(n)` | n 节点的完全图 |
 | `gen_graph_bipartite(n1, n2, m)` | 二分图：左 n1 右 n2 节点，m 条边 |
+| `gen_graph_directed(n, m)` | 有向图（允许环，无重边） |
 
 ---
 
@@ -363,6 +374,8 @@ for (auto &tc : cases) {
 ./gen 2024       # 用种子 2024 生成 → 每次跑出来的数据一模一样
 ./gen 2024 out   # 同样种子生成输出
 ```
+
+不同题目的种子会自动混入 `g_problem_id` 的哈希值，所以即使多个题目用同一个种子号，生成的随机序列也互不干扰。不指定种子时用系统时钟自动生成。
 
 ---
 

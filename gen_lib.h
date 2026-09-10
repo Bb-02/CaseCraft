@@ -347,14 +347,18 @@ vector<pair<int, int>> gen_tree_deg_capped(int n, int max_deg) {
     assert(max_deg >= 2);
     vector<int> deg(n + 1);
     vector<pair<int, int>> edges;
-    set<int> cand;
-    cand.insert(1);
+    vector<int> cand; // 度数还没满的节点，可作为后续节点的父节点
+    cand.push_back(1);
     for (int v = 2; v <= n; v++) {
-        int u = rnd->pick(vector<int>(cand.begin(), cand.end()));
+        int i = (int)rnd->next_n(cand.size());
+        int u = cand[i];
         edges.push_back({min(u, v), max(u, v)});
         deg[u]++, deg[v]++;
-        if (deg[u] >= max_deg) cand.erase(u);
-        cand.insert(v);
+        if (deg[u] >= max_deg) {
+            cand[i] = cand.back(); // 与末尾交换后删除，避免移动整个尾部
+            cand.pop_back();
+        }
+        cand.push_back(v);
     }
     return edges;
 }
@@ -363,13 +367,17 @@ vector<pair<int, int>> gen_tree_deg_capped(int n, int max_deg) {
 vector<pair<int, int>> gen_tree_binary(int n) {
     vector<int> children(n + 1, 0);
     vector<pair<int, int>> edges;
-    set<int> cand; // 孩子数还没满 2 的节点，可作为后续节点的父节点
-    cand.insert(1);
+    vector<int> cand; // 孩子数还没满 2 的节点，可作为后续节点的父节点
+    cand.push_back(1);
     for (int v = 2; v <= n; v++) {
-        int u = rnd->pick(vector<int>(cand.begin(), cand.end()));
+        int i = (int)rnd->next_n(cand.size());
+        int u = cand[i];
         edges.push_back({min(u, v), max(u, v)});
-        if (++children[u] == 2) cand.erase(u);
-        cand.insert(v);
+        if (++children[u] == 2) {
+            cand[i] = cand.back(); // 与末尾交换后删除，避免移动整个尾部
+            cand.pop_back();
+        }
+        cand.push_back(v);
     }
     return edges;
 }

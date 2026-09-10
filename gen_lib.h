@@ -361,7 +361,17 @@ vector<pair<int, int>> gen_tree_deg_capped(int n, int max_deg) {
 
 // n 个节点的随机二叉树（每个节点最多 2 个子节点，1 为根）
 vector<pair<int, int>> gen_tree_binary(int n) {
-    return gen_tree_deg_capped(n, 3); // 根最多 2 子 + 可能无父，deg <= 3
+    vector<int> children(n + 1, 0);
+    vector<pair<int, int>> edges;
+    set<int> cand; // 孩子数还没满 2 的节点，可作为后续节点的父节点
+    cand.insert(1);
+    for (int v = 2; v <= n; v++) {
+        int u = rnd->pick(vector<int>(cand.begin(), cand.end()));
+        edges.push_back({min(u, v), max(u, v)});
+        if (++children[u] == 2) cand.erase(u);
+        cand.insert(v);
+    }
+    return edges;
 }
 
 // n 个节点以 1 为根的有根树，返回父节点数组 p[2..n]（p[1]=0 略去）

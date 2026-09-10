@@ -6,11 +6,15 @@
 *.ilk
 gen
 gen_*
+newcase
 
-# 生成的测试数据（本地运行产生，不上传）
+# 生成的测试数据
 Data/*_Data/
+# 题目生成器的内容
+Generators/
 
 # IDE
+.claude/
 .vscode/
 .idea/
 *.swp

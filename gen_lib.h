@@ -3,11 +3,10 @@
  * gen_lib.h — 算法题数据生成核心库
  *
  * 用法：
- *   1. 复制 template.cpp 到新文件
- *   2. 修改 g_problem_id = "你的题目名"
- *   3. 编写 generate_input() 和 solve()
- *   4. 编译运行：
- *        g++ -std=c++17 -O2 your_file.cpp -o gen
+ *   1. 运行 newcase 你的题目名（生成 Generators/{题目名}/ 目录和骨架）
+ *   2. 编写 generate_input() 和 solve()
+ *   3. 在项目根目录编译运行：
+ *        g++ -std=c++17 -O2 Generators/{题目名}/{题目名}.cpp -o gen
  *        ./gen        生成输入 (.in)
  *        ./gen out    生成输出 (.out)
  *

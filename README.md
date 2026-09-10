@@ -11,24 +11,31 @@
 
 # 5 分钟快速上手
 
-## 第 1 步：复制模板
+## 第 1 步：一键建题
 
-复制 `template.cpp` → 重命名为你的题目的名字（比如 `sum.cpp`）
+用 `newcase` 工具生成题目目录（题面 + 生成器源码的骨架）：
+
 ```
-cp template.cpp sum.cpp
-```
-
-## 第 2 步：改题目 ID
-
-打开文件，找到第一行能改的代码：
-
-```cpp
-string g_problem_id = "sum"; // 改这里
+newcase Sum          # 题目英文名 = Sum
+newcase Sum 求和     # 顺便带上中文标题，写进题面.md
+newcase              # 交互式：按提示输入
 ```
 
-**这个 ID 决定数据存到哪。** 改成 `"sum"`，数据就去 `Data/sum_Data/`。
+会自动生成：
 
-## 第 3 步：写造数据代码
+```
+Generators/Sum/Sum.cpp    复制自 template.cpp，g_problem_id 已填好
+Generators/Sum/题面.md     题面骨架（题目描述/输入/输出/样例/数据范围）
+```
+
+> 题目英文名只能用字母、数字、下划线、连字符，它同时是目录名和数据 ID。
+>
+> 不用工具也行：手动复制 `template.cpp`，改 `g_problem_id = "sum"`，
+> 存到 `Generators/sum/sum.cpp`，再自己建个 `题面.md`。
+
+## 第 2 步：写题面和造数据代码
+
+题面写在 `Generators/Sum/题面.md` 里。
 
 在 `generate_input()` 里面写：
 
@@ -61,7 +68,7 @@ void generate_input() {
 }
 ```
 
-## 第 4 步：写题解
+## 第 3 步：写题解
 
 在 `solve()` 里面写：
 
@@ -80,12 +87,19 @@ void solve(istream &in, ostream &out) {
 }
 ```
 
-## 第 5 步：编译运行
+## 第 4 步：编译运行
+
+**在项目根目录编译和运行**（生成器在子目录里通过 `../../gen_lib.h` 引用核心库，
+数据统一出到根目录的 `Data/`）：
 
 ```bash
-g++ -std=c++17 -O2 sum.cpp -o gen
+# MSVC（VS 开发者命令行）
+cl /utf-8 /EHsc /std:c++17 /O2 /Fe:gen.exe Generators/Sum/Sum.cpp
 
-./gen        # 生成 Data/sum_Data/001.in, 002.in ...
+# g++
+g++ -std=c++17 -O2 Generators/Sum/Sum.cpp -o gen
+
+./gen        # 生成 Data/Sum_Data/001.in, 002.in ...
 ./gen out    # 读取 .in，跑 solve，生成 .out
 ./gen 12345  # 固定随机种子（让每次生成的数据一样）
 ```
@@ -97,16 +111,23 @@ g++ -std=c++17 -O2 sum.cpp -o gen
 ```
 CaseCraft/
 ├── gen_lib.h           ← 核心库（不需要动）
-├── template.cpp        ← 模板，复制这个开始写新题
+├── template.cpp        ← 模板（newcase 工具从这里复制）
+├── newcase.cpp         ← 一键建题工具，编译成 newcase.exe
 ├── example_graph.cpp   ← 完整示例（最短路径）
 ├── README.md           ← 本文
-└── Data/               ← 所有数据
-    ├── sum_Data/       ← sum 题的数据
+├── Generators/         ← 题目生成器（每题一个文件夹）
+│   ├── Sum/
+│   │   ├── 题面.md
+│   │   └── Sum.cpp     （g_problem_id = "Sum"）
+│   └── Tree/
+│       ├── 题面.md
+│       └── Tree.cpp
+└── Data/               ← 所有数据（自动生成，不上传）
+    ├── Sum_Data/       ← Sum 题的数据
     │   ├── 001.in
     │   ├── 001.out
-    │   ├── 002.in
-    │   └── 002.out
-    └── tree_Data/      ← tree 题的数据
+    │   └── ...
+    └── Tree_Data/
         └── ...
 ```
 
@@ -392,10 +413,10 @@ for (auto &tc : cases) {
 
 # 添加新题目 checklist
 
-1. `cp template.cpp xxx.cpp`
-2. 修改 `g_problem_id = "xxx"`
+1. 运行 `newcase Xxx`（或 `newcase` 按提示输入）
+2. 写 `Generators/Xxx/题面.md`
 3. 写 `generate_input()` — 用 `dw.next()` 和 `gen_xxx()` 造数据
 4. 写 `solve(istream&, ostream&)` — 题解
-5. `g++ -std=c++17 -O2 xxx.cpp -o gen`
+5. 在根目录编译：`cl /utf-8 /EHsc /std:c++17 /O2 /Fe:gen.exe Generators/Xxx/Xxx.cpp`
 6. `./gen` 生成输入，`./gen out` 生成输出
-7. 检查 `Data/xxx_Data/` 目录下的 `.in` 和 `.out`
+7. 检查 `Data/Xxx_Data/` 目录下的 `.in` 和 `.out`

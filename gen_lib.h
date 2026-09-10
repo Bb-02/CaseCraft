@@ -594,10 +594,14 @@ void print_real_vec(const vector<T> &v, int precision = 6) {
     print_real_vec(cout, v, precision);
 }
 
-// 创建目录（跨平台）
+// 创建目录（跨平台）；失败时抛异常（含路径和原因），
+// 避免目录建不出来还继续"成功"地生成数据
 inline void ensure_dir(const string &path) {
     error_code ec;
     fs::create_directories(path, ec);
+    if (ec)
+        throw runtime_error("ensure_dir: cannot create directory '" + path +
+                            "': " + ec.message());
 }
 
 // ============================================================
@@ -633,10 +637,16 @@ struct DataWriter {
     }
 
     // 通过 lambda 写入（推荐）
+    // 打开失败或写入失败会抛异常；确认写入成功才打印日志
     string next(const function<void(ostream &)> &writer) {
         string path = next_path();
         ofstream fout(path);
+        if (!fout.is_open())
+            throw runtime_error("DataWriter: cannot open file '" + path + "'");
         writer(fout);
+        fout.flush();
+        if (!fout)
+            throw runtime_error("DataWriter: write failed: '" + path + "'");
         cerr << "  -> " << path << '\n';
         return path;
     }
@@ -645,7 +655,12 @@ struct DataWriter {
     string next_str(const string &content) {
         string path = next_path();
         ofstream fout(path);
+        if (!fout.is_open())
+            throw runtime_error("DataWriter: cannot open file '" + path + "'");
         fout << content;
+        fout.flush();
+        if (!fout)
+            throw runtime_error("DataWriter: write failed: '" + path + "'");
         cerr << "  -> " << path << '\n';
         return path;
     }
@@ -707,6 +722,10 @@ inline void gen_output(const function<void(istream &, ostream &)> &solve,
         out_path.replace_extension(".out");
 
         ofstream fout(out_path);
+        if (!fout.is_open()) {
+            cerr << "Failed to write: " << out_path << '\n';
+            continue;
+        }
         solve(fin, fout);
 
         cerr << "  [" << in_path.filename() << "] -> "

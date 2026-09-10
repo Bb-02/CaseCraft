@@ -139,8 +139,15 @@ int main(int argc, char *argv[]) {
         cerr << "Seed: <random from system clock>\n";
     }
 
-    if (out_mode) gen_output(solve);
-    else generate_input();
+    try {
+        if (out_mode) gen_output(solve);
+        else generate_input();
+    } catch (const exception &e) {
+        // 目录建不出来/文件写不进去等 I/O 错误：打印原因并以非零码退出，
+        // 方便脚本及时终止，避免误以为数据已生成
+        cerr << "Error: " << e.what() << '\n';
+        return 1;
+    }
 
     delete rnd;
     return 0;

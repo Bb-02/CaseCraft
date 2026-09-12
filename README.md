@@ -104,6 +104,8 @@ g++ -std=c++17 -O2 Generators/Sum/Sum.cpp -o gen
 ./gen 12345  # 固定随机种子（让每次生成的数据一样）
 ```
 
+> 怕题解写错？写个暴力就能 `./gen duipai` 自动对拍验证，见下面的[对拍]章节。
+
 ---
 
 # 目录结构
@@ -111,9 +113,11 @@ g++ -std=c++17 -O2 Generators/Sum/Sum.cpp -o gen
 ```
 CaseCraft/
 ├── gen_lib.h           ← 核心库（不需要动）
+├── duipai.h            ← 对拍器（配合 gen_lib.h，不需要动）
 ├── template.cpp        ← 模板（newcase 工具从这里复制）
 ├── newcase.cpp         ← 一键建题工具，编译成 newcase.exe
 ├── example_graph.cpp   ← 完整示例（最短路径）
+├── tests/              ← duipai 自测（make test）
 ├── README.md           ← 本文
 ├── Generators/         ← 题目生成器（每题一个文件夹）
 │   ├── Sum/
@@ -303,6 +307,62 @@ void solve(istream &in, ostream &out) {
 
 ---
 
+# 对拍 — 用暴力自动验证题解正确性
+
+solve 写完心里没底？写个暴力让它俩对拍，不一致立刻抓出来。
+
+在题目 .cpp 里写两个函数（`newcase` 生成的骨架里自带这两个空壳）：
+
+```cpp
+// ① 造一个【小】随机数据。brute 要跑得动，规模控制在几十以内。
+//    每轮自动换一个独立种子的 rnd，放心用 rnd-> 生成随机数。
+void gen_case(ostream &o) {
+    int n = rnd->next(1, 10);
+    o << n << '\n';
+    print_vec(o, gen_array(n, -100, 100));
+}
+
+// ② 正确性显然的暴力解。输出格式必须和 solve 完全一致。
+void brute(istream &in, ostream &out) {
+    int n; in >> n;
+    long long s = 0;
+    for (int i = 0; i < n; i++) { long long x; in >> x; s += x; }
+    out << s << '\n';
+}
+```
+
+然后一条命令：
+
+```bash
+./gen duipai              # ③ 默认 100 轮：造数据 → solve/brute 各跑一遍 → 比对
+./gen duipai 10000        # 轰炸 10000 轮
+./gen duipai 1000 2024    # 固定种子，可复现
+```
+
+每 100 轮打印一次进度；**输出不一致会立刻停下**（退出码 1），现场存在
+`Data/{id}_Duipai/` 下：
+
+```
+005.in          出事的输入
+005.solve.out   solve 的输出
+005.brute.out   brute 的输出
+```
+
+目录里还会滚动保存 `cur.in`（当前这轮的输入）。对拍在进程内跑，没有超时——
+万一 solve 或 brute 死循环，Ctrl+C 之后直接看 `cur.in`，就是肇事的那组数据。
+
+**比较规则**：按行比较；忽略行尾空白和文末空行；行首空白、中间空行、行内
+空格数量都参与比较（偏严格，图形输出安全）。浮点题要按误差比较的话，调
+`run_duipai_core()` + `DuipaiOptions::compare` 自定义比较器（见 `duipai.h`）。
+
+**可复现**：每轮数据只由 (总种子, 轮数) 决定。`./gen duipai 1000 2024` 在第 7 轮
+出了不一致，改天重跑同一条命令，前 6 轮一字不差，第 7 轮必现。
+
+> 想测外部编译好的 exe、或做交互题对拍？`duipai.h` 的核心是按参数驱动的
+> （`DuipaiSolver` 适配器），加一个"跑子进程"的适配器就能接入，核心不用动。
+
+---
+
 # 常见用法集锦
 
 ## 造极端数据
@@ -407,7 +467,12 @@ for (auto &tc : cases) {
 | `./gen` | 生成输入（随机种子） |
 | `./gen 12345` | 生成输入（种子=12345，可复现） |
 | `./gen out` | 生成输出 |
-| `./gen 12345 out` | 生成输出（指定种子） |
+| `./gen 12345 out` | 生成输出（指定种子，`out` 位置随意） |
+| `./gen duipai` | 对拍 100 轮（solve vs brute） |
+| `./gen duipai 1000` | 对拍 1000 轮 |
+| `./gen duipai 1000 12345` | 对拍 1000 轮（种子=12345，可复现） |
+
+对拍发现不一致 / 运行出错时退出码为 1，方便脚本判断。
 
 ---
 
@@ -417,6 +482,7 @@ for (auto &tc : cases) {
 2. 写 `Generators/Xxx/题面.md`
 3. 写 `generate_input()` — 用 `dw.next()` 和 `gen_xxx()` 造数据
 4. 写 `solve(istream&, ostream&)` — 题解
-5. 在根目录编译：`cl /utf-8 /EHsc /std:c++17 /O2 /Fe:gen.exe Generators/Xxx/Xxx.cpp`
-6. `./gen` 生成输入，`./gen out` 生成输出
-7. 检查 `Data/Xxx_Data/` 目录下的 `.in` 和 `.out`
+5. 写 `gen_case()` 和 `brute()` — 对拍三件套，`./gen duipai` 验证题解
+6. 在根目录编译：`cl /utf-8 /EHsc /std:c++17 /O2 /Fe:gen.exe Generators/Xxx/Xxx.cpp`
+7. `./gen duipai` 对拍通过 → `./gen` 生成输入，`./gen out` 生成输出
+8. 检查 `Data/Xxx_Data/` 目录下的 `.in` 和 `.out`

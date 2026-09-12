@@ -23,9 +23,10 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
-#ifdef _WIN32
+#if defined(_WIN32) && defined(_MSC_VER)
 #include <windows.h>
 #endif
 
@@ -67,19 +68,28 @@ string make_cpp_source(const string &tmpl, const string &id, bool &ok) {
     ok = true;
     string src = tmpl;
 
-    const string inc_from = "#include \"gen_lib.h\"";
-    const string inc_to = "#include \"../../gen_lib.h\"";
-    size_t pos = src.find(inc_from);
-    if (pos == string::npos) {
-        cerr << "错误：template.cpp 中找不到 " << inc_from << '\n';
-        ok = false;
-        return src;
+    // 生成器在子目录里，include 路径要改成 ../../
+    // gen_lib.h 是必须存在的；duipai.h 是新模板才有的，没有就跳过
+    const pair<string, string> rewrites[] = {
+        {"#include \"gen_lib.h\"", "#include \"../../gen_lib.h\""},
+        {"#include \"duipai.h\"", "#include \"../../duipai.h\""},
+    };
+    for (auto [from, to] : rewrites) {
+        size_t pos = src.find(from);
+        if (pos == string::npos) {
+            if (from.find("gen_lib") != string::npos) {
+                cerr << "错误：template.cpp 中找不到 " << from << '\n';
+                ok = false;
+                return src;
+            }
+            continue;
+        }
+        src.replace(pos, from.size(), to);
     }
-    src.replace(pos, inc_from.size(), inc_to);
 
     const string id_from = "\"my_problem\"";
     const string id_to = "\"" + id + "\"";
-    pos = src.find(id_from);
+    size_t pos = src.find(id_from);
     if (pos == string::npos) {
         cerr << "错误：template.cpp 中找不到 g_problem_id 的默认值 my_problem\n";
         ok = false;
@@ -89,9 +99,10 @@ string make_cpp_source(const string &tmpl, const string &id, bool &ok) {
     return src;
 }
 
-#ifdef _WIN32
-// Windows 的 main argv 按系统 ANSI 编码（GBK）解释，中文参数会乱码；
-// 用 wmain 拿 UTF-16 参数再手动转 UTF-8
+#if defined(_WIN32) && defined(_MSC_VER)
+// MSVC 下 Windows 的 main argv 按系统 ANSI 编码（GBK）解释，中文参数会乱码；
+// 用 wmain 拿 UTF-16 参数再手动转 UTF-8。
+// MinGW 的 g++ 默认链接 ANSI 入口（wmain 需要 -municode），走下面的普通 main。
 string wide_to_utf8(const wchar_t *ws) {
     if (!ws) return "";
     int n = WideCharToMultiByte(CP_UTF8, 0, ws, -1, nullptr, 0, nullptr, nullptr);
@@ -166,7 +177,7 @@ int run(const vector<string> &args) {
     return 0;
 }
 
-#ifdef _WIN32
+#if defined(_WIN32) && defined(_MSC_VER)
 int wmain(int argc, wchar_t *argv[]) {
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);

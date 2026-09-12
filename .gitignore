@@ -10,6 +10,8 @@ newcase
 
 # 生成的测试数据
 Data/*_Data/
+# 对拍失败现场
+Data/*_Duipai/
 # 题目生成器的内容
 Generators/
 

@@ -4,11 +4,13 @@
  * 用法：
  *   生成输入数据：./gen [seed]
  *   生成输出数据：./gen out
+ *   对拍验证：  ./gen duipai [rounds] [seed]   （solve vs brute，见步骤 3）
  *
  * 数据输出到：Data/{g_problem_id}_Data/
  */
 
 #include "gen_lib.h"
+#include "duipai.h"
 using namespace std;
 
 // ============================================================
@@ -102,45 +104,94 @@ void solve(istream &in, ostream &out) {
 }
 
 // ============================================================
-int main(int argc, char *argv[]) {
-    bool out_mode = false;
-    uint64_t seed = 0;
-    bool seed_set = false;
+// && 步骤 3（可选但对拍必填）：./gen duipai 用暴力验证 solve
+// ============================================================
+// gen_case：造一个【小】随机数据。brute 要跑得动，规模控制在几十以内。
+// 每轮都会自动换一个独立种子的 rnd，这里放心用 rnd-> 生成随机数。
+void gen_case(ostream &o) {
+    int a = rnd->next(-100, 100);
+    int b = rnd->next(-100, 100);
+    o << a << ' ' << b << '\n';
+}
 
+// brute：正确性显然的暴力解。输出格式必须和 solve 完全一致。
+void brute(istream &in, ostream &out) {
+    int a, b;
+    in >> a >> b;
+    out << a + b << '\n';
+}
+
+// ============================================================
+int main(int argc, char *argv[]) {
+    // ---- 命令行解析 ----
+    //   ./gen                    生成输入（随机种子）
+    //   ./gen 12345              生成输入（种子=12345，可复现）
+    //   ./gen out                生成输出（"out" 写在哪个位置都行）
+    //   ./gen duipai [r] [seed]  对拍：solve vs brute，默认 100 轮
+    string mode;
+    vector<string> nums;
     for (int i = 1; i < argc; i++) {
         string arg = argv[i];
-        if (arg == "out") out_mode = true;
-        else seed = stoull(arg), seed_set = true;
-    }
-
-    // ---- 种子初始化说明 ----
-    // Random 底层是 mt19937_64 伪随机引擎：
-    //   - 同一种子 → 完全相同的随机序列（可复现数据，方便出题调参）
-    //   - 不同种子 → 完全不同的随机序列
-    //
-    // 种子生成策略：
-    //   1. 用户指定种子（如 ./gen 12345）→ 混入题目 ID 后作为种子
-    //      hash("题目ID") ^ 用户种子 → 保证不同题目即使同种子，序列也不同
-    //   2. 未指定种子 → 用系统时钟 + 题目 ID 自动生成（每次运行都不同）
-    //
-    // 为什么要混入 g_problem_id：
-    //   如果两个题目都写 rnd->next(1, 100) 作为第一个随机调用，且用同一种子，
-    //   它们会得到相同的"随机"值。混入题目 ID 后彻底隔离，互不干扰。
-    if (seed_set) {
-        // 用户种子 XOR 题目 ID 哈希 → 不同题目的序列彻底隔离
-        uint64_t id_hash = hash<string>{}(g_problem_id);
-        rnd = new Random(seed ^ id_hash);
-        cerr << "Problem: " << g_problem_id << '\n';
-        cerr << "Seed: " << seed << " (mixed with id hash: " << id_hash << ")\n";
-    } else {
-        // 无种子 → 默认构造函数用 steady_clock 时间戳做种子
-        rnd = new Random();
-        cerr << "Problem: " << g_problem_id << '\n';
-        cerr << "Seed: <random from system clock>\n";
+        if (arg == "out" || arg == "duipai") {
+            if (!mode.empty()) {
+                cerr << "Error: out 和 duipai 只能二选一\n";
+                return 1;
+            }
+            mode = arg;
+        } else {
+            nums.push_back(arg);
+        }
     }
 
     try {
-        if (out_mode) gen_output(solve);
+        if (mode == "duipai")
+            return run_duipai_cli(nums); // 内部会接管全局 rnd（详见 duipai.h）
+
+        // ---- 种子初始化 ----
+        // Random 底层是 mt19937_64 伪随机引擎：
+        //   - 同一种子 → 完全相同的随机序列（可复现数据，方便出题调参）
+        //   - 不同种子 → 完全不同的随机序列
+        //
+        // 种子生成策略：
+        //   1. 用户指定种子（如 ./gen 12345）→ 混入题目 ID 后作为种子
+        //      hash("题目ID") ^ 用户种子 → 保证不同题目即使同种子，序列也不同
+        //   2. 未指定种子 → 用系统时钟 + 题目 ID 自动生成（每次运行都不同）
+        //
+        // 为什么要混入 g_problem_id：
+        //   如果两个题目都写 rnd->next(1, 100) 作为第一个随机调用，且用同一种子，
+        //   它们会得到相同的"随机"值。混入题目 ID 后彻底隔离，互不干扰。
+        uint64_t seed = 0;
+        bool seed_set = false;
+        if (!nums.empty()) {
+            const string &s = nums.back(); // 与旧版一致：取最后一个数字当种子
+            // 只接受纯数字。不直接 stoull：它会把 "-1" 回绕成大正数、"12ab" 解析成 12
+            if (s.empty() || s.find_first_not_of("0123456789") != string::npos) {
+                cerr << "Error: 无效参数 '" << s << "'（应为纯数字的种子）\n";
+                return 1;
+            }
+            try {
+                seed = stoull(s);
+            } catch (...) {
+                cerr << "Error: 种子超出范围 '" << s << "'\n";
+                return 1;
+            }
+            seed_set = true;
+        }
+
+        if (seed_set) {
+            // 用户种子 XOR 题目 ID 哈希 → 不同题目的序列彻底隔离
+            uint64_t id_hash = hash<string>{}(g_problem_id);
+            rnd = new Random(seed ^ id_hash);
+            cerr << "Problem: " << g_problem_id << '\n';
+            cerr << "Seed: " << seed << " (mixed with id hash: " << id_hash << ")\n";
+        } else {
+            // 无种子 → 默认构造函数用 steady_clock 时间戳做种子
+            rnd = new Random();
+            cerr << "Problem: " << g_problem_id << '\n';
+            cerr << "Seed: <random from system clock>\n";
+        }
+
+        if (mode == "out") gen_output(solve);
         else generate_input();
     } catch (const exception &e) {
         // 目录建不出来/文件写不进去等 I/O 错误：打印原因并以非零码退出，

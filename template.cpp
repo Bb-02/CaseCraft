@@ -11,6 +11,7 @@
 
 #include "gen_lib.h"
 #include "duipai.h"
+#include "bench.h"
 using namespace std;
 
 // ============================================================
@@ -122,19 +123,37 @@ void brute(istream &in, ostream &out) {
 }
 
 // ============================================================
+// && 步骤 4（可选但对拍必填）：./gen bench —— 多个实现横向计时
+// ============================================================
+// gen_bench：造一份基准数据，所有待测实现共用它。
+// 规模给"能看出差异、又不至于跑太久"的量级（比如让慢的那版跑 1 秒上下）。
+void gen_bench(ostream &o) {
+    int a = rnd->next(-1000000, 1000000);
+    int b = rnd->next(-1000000, 1000000);
+    o << a << ' ' << b << '\n';
+}
+
+// bench_register：注册待测实现，第一个是基准（1.00x）。
+// 想测"改动前后"就把新旧两版都放这里；默认只测 solve。
+void bench_register(vector<BenchEntry> &v) {
+    v.push_back({"solve", solve});
+}
+
+// ============================================================
 int main(int argc, char *argv[]) {
     // ---- 命令行解析 ----
     //   ./gen                    生成输入（随机种子）
     //   ./gen 12345              生成输入（种子=12345，可复现）
     //   ./gen out                生成输出（"out" 写在哪个位置都行）
     //   ./gen duipai [r] [seed]  对拍：solve vs brute，默认 100 轮
+    //   ./gen bench [r] [seed]   计时：横向对比 bench_register 里的实现，默认 5 遍
     string mode;
     vector<string> nums;
     for (int i = 1; i < argc; i++) {
         string arg = argv[i];
-        if (arg == "out" || arg == "duipai") {
+        if (arg == "out" || arg == "duipai" || arg == "bench") {
             if (!mode.empty()) {
-                cerr << "Error: out 和 duipai 只能二选一\n";
+                cerr << "Error: out / duipai / bench 只能三选一\n";
                 return 1;
             }
             mode = arg;
@@ -146,6 +165,8 @@ int main(int argc, char *argv[]) {
     try {
         if (mode == "duipai")
             return run_duipai_cli(nums); // 内部会接管全局 rnd（详见 duipai.h）
+        if (mode == "bench")
+            return run_bench_cli(nums); // 详见 bench.h
 
         // ---- 种子初始化 ----
         // Random 底层是 mt19937_64 伪随机引擎：

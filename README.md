@@ -114,10 +114,11 @@ g++ -std=c++17 -O2 Generators/Sum/Sum.cpp -o gen
 CaseCraft/
 ├── gen_lib.h           ← 核心库（不需要动）
 ├── duipai.h            ← 对拍器（配合 gen_lib.h，不需要动）
+├── bench.h             ← 计时测评（配合 duipai.h，不需要动）
 ├── template.cpp        ← 模板（newcase 工具从这里复制）
 ├── newcase.cpp         ← 一键建题工具，编译成 newcase.exe
 ├── example_graph.cpp   ← 完整示例（最短路径）
-├── tests/              ← duipai 自测（make test）
+├── tests/              ← duipai/bench 自测（make test）
 ├── README.md           ← 本文
 ├── Generators/         ← 题目生成器（每题一个文件夹）
 │   ├── Sum/
@@ -363,6 +364,58 @@ void brute(istream &in, ostream &out) {
 
 ---
 
+# 计时测评（bench）— 横向对比多个实现的耗时
+
+对拍管"对不对"，bench 管"快不快"。想知道剪枝、换数据结构、算法改动到底带来多少提升？
+
+在题目 .cpp 里写两个函数（`newcase` 生成的骨架自带空壳）：
+
+```cpp
+// ① 造一份基准数据：所有待测实现共用同一份输入。
+//    规模给"能看出差异、又不至于跑太久"的量级。
+void gen_bench(ostream &o) {
+    int n = 5000000;
+    o << n << '\n';
+}
+
+// ② 注册待测实现，第一个是基准（1.00x）。
+//    测"改动前后"就把新旧两版都放这里，跑完删掉旧版。
+void bench_register(vector<BenchEntry> &v) {
+    v.push_back({"O(n) 循环", solve});       // 基准
+    v.push_back({"O(1) 公式", formula});     // 对比项
+}
+```
+
+```bash
+./gen bench             # 每个实现跑 5 遍
+./gen bench 10 42       # 10 遍，固定种子（输入可复现，跨构建对比用它）
+```
+
+输出一张表：
+
+```
+  name         min        median       rel
+  O(n) 循环    0.99 ms     1.04 ms     1.00x
+  O(1) 公式    0.00 ms     0.00 ms  1103.56x
+```
+
+**内置正确性交叉校验**：所有实现的输出会用对拍的规则互比，不一致会警告并使
+退出码为 1 ——输出都不一样，比时间没有意义，先去 `./gen duipai`。
+
+**公平性由工具保证**：
+
+- 所有实现共用同一份输入；每遍运行前 `rnd` 重置为同一初态（随机化算法也公平）
+- 预热 1 遍不计入统计；交错计时（每轮所有实现各跑一遍），降低机器状态漂移的影响
+- 报 min 和 median，不报平均值；输出长度汇入 volatile 变量，防止计算被编译器优化掉
+
+**对比实验的纪律**（工具保证不了的，靠你）：
+
+- 同一台机器、同样的编译优化等级（都是 -O2）
+- 看量级：几倍以上的差异是真的；百分之几十可能是噪声，多跑几遍再下结论
+- 只测耗时，不测内存；换数据规模请改 `gen_bench` 后重跑
+
+---
+
 # 常见用法集锦
 
 ## 造极端数据
@@ -471,8 +524,11 @@ for (auto &tc : cases) {
 | `./gen duipai` | 对拍 100 轮（solve vs brute） |
 | `./gen duipai 1000` | 对拍 1000 轮 |
 | `./gen duipai 1000 12345` | 对拍 1000 轮（种子=12345，可复现） |
+| `./gen bench` | 计时测评（每项 5 遍） |
+| `./gen bench 10 42` | 计时测评 10 遍（种子=42，可复现） |
 
-对拍发现不一致 / 运行出错时退出码为 1，方便脚本判断。
+对拍发现不一致 / 运行出错时退出码为 1；bench 在有实现抛异常或输出不一致时
+退出码为 1，方便脚本判断。
 
 ---
 
@@ -482,7 +538,8 @@ for (auto &tc : cases) {
 2. 写 `Generators/Xxx/题面.md`
 3. 写 `generate_input()` — 用 `dw.next()` 和 `gen_xxx()` 造数据
 4. 写 `solve(istream&, ostream&)` — 题解
-5. 写 `gen_case()` 和 `brute()` — 对拍三件套，`./gen duipai` 验证题解
-6. 在根目录编译：`cl /utf-8 /EHsc /std:c++17 /O2 /Fe:gen.exe Generators/Xxx/Xxx.cpp`
-7. `./gen duipai` 对拍通过 → `./gen` 生成输入，`./gen out` 生成输出
-8. 检查 `Data/Xxx_Data/` 目录下的 `.in` 和 `.out`
+5. 写 `gen_case()` 和 `brute()` — 对拍三件套，`./gen duipai` 验证题解正确性
+6. （可选）写 `gen_bench()` 和 `bench_register()` — `./gen bench` 对比改动前后耗时
+7. 在根目录编译：`cl /utf-8 /EHsc /std:c++17 /O2 /Fe:gen.exe Generators/Xxx/Xxx.cpp`
+8. `./gen duipai` 对拍通过 → `./gen` 生成输入，`./gen out` 生成输出
+9. 检查 `Data/Xxx_Data/` 目录下的 `.in` 和 `.out`

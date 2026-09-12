@@ -56,6 +56,7 @@ void solve(istream &in, ostream &out) {
 ./gen        # 生成 Data/sum_Data/001.in ~ 011.in
 ./gen out    # 自动读入 .in，跑 solve，生成 .out
 ./gen duipai # 写好暴力后一键对拍，验证 solve 的正确性
+./gen bench  # 横向计时，测算法改动/剪枝带来多少提升
 ```
 
 完事。
@@ -80,6 +81,7 @@ void solve(istream &in, ostream &out) {
 | 完全图 | `gen_graph_complete(n)` |
 | 二分图 | `gen_graph_bipartite(n1, n2, m)` |
 | **对拍验证题解** | `./gen duipai`，solve vs 暴力，不一致自动留现场 |
+| **计时横向测评** | `./gen bench`，同一输入多实现对比，min/median + 加速比 |
 
 ## 对比
 

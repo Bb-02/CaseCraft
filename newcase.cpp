@@ -69,10 +69,11 @@ string make_cpp_source(const string &tmpl, const string &id, bool &ok) {
     string src = tmpl;
 
     // 生成器在子目录里，include 路径要改成 ../../
-    // gen_lib.h 是必须存在的；duipai.h 是新模板才有的，没有就跳过
+    // gen_lib.h 是必须存在的；duipai.h / bench.h 是新模板才有的，没有就跳过
     const pair<string, string> rewrites[] = {
         {"#include \"gen_lib.h\"", "#include \"../../gen_lib.h\""},
         {"#include \"duipai.h\"", "#include \"../../duipai.h\""},
+        {"#include \"bench.h\"", "#include \"../../bench.h\""},
     };
     for (auto [from, to] : rewrites) {
         size_t pos = src.find(from);

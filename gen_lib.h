@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -413,6 +414,84 @@ vector<int> gen_parent_array(int n) {
 // 图生成器
 // ============================================================
 
+// ============================================================
+// 内部工具（genlib_detail）—— 图生成器用，一般不直接调用
+// ============================================================
+namespace genlib_detail {
+
+// 稠密分支候选空间上限：补集路径要全扫一遍候选（O(total)），
+// 超过上限退回稀疏拒绝采样（那种规模的稠密图意味着 GB 级输入文件，现实遇不到）
+constexpr long long DENSE_SCAN_CAP = 400'000'000LL;
+
+// 反复过采样 + 排序去重 + 部分洗牌，取出 k 个互不相同的候选。
+// draw() 每次返回一条候选（调用方负责过滤结构性非法的，如自环/树边）。
+// 首轮过采样 1.5 倍，不够再缩小批量补抽；候选空间耗尽仍不足则抛异常。
+// 结果是候选空间中均匀随机的 k-子集（候选可交换 ⇒ 无偏）。
+template <typename T, typename Draw>
+vector<T> draw_distinct(long long k, Draw draw) {
+    vector<T> pool;
+    if (k <= 0) return pool;
+    long long batch = k + k / 2 + 64;
+    while (true) {
+        size_t before = pool.size();
+        for (long long i = 0; i < batch; i++) pool.push_back(draw());
+        sort(pool.begin(), pool.end());
+        pool.erase(unique(pool.begin(), pool.end()), pool.end());
+        if ((long long)pool.size() >= k) break;
+        if (pool.size() == before)
+            throw runtime_error("draw_distinct: 候选空间已耗尽（k 超过可用的不同候选数）");
+        batch = max<long long>(64, batch / 2);
+    }
+    // 部分洗牌：前 k 个是池子的均匀随机 k-子集
+    for (long long i = 0; i < k; i++)
+        swap(pool[i], pool[i + rnd->next_n((long long)pool.size() - i)]);
+    pool.resize((size_t)k);
+    return pool;
+}
+
+// ---- 候选空间的双向编号 ----
+// 上三角编号：无向图 / 拓扑序候选 (u, v)，0-based，u < v ∈ [0, n)，共 C(n,2) 个
+inline long long tri_index(long long u, long long v, long long n) {
+    return u * (n - 1) - u * (u - 1) / 2 + (v - u - 1);
+}
+inline pair<long long, long long> tri_uv(long long idx, long long n) {
+    auto cum = [&](long long i) { return i * (n - 1) - i * (i - 1) / 2; };
+    long long u = (long long)(((2.0 * n - 1) - sqrt((2.0 * n - 1) * (2.0 * n - 1) - 8.0 * idx)) / 2);
+    while (u + 1 < n && cum(u + 1) <= idx) u++;
+    while (u > 0 && cum(u) > idx) u--;
+    return {u, u + 1 + (idx - cum(u))};
+}
+// 有向完全图编号：(u, v)，0-based，u ≠ v ∈ [0, n)，共 n(n-1) 个
+inline long long dir_index(long long u, long long v, long long n) {
+    return u * (n - 1) + (v < u ? v : v - 1);
+}
+inline pair<long long, long long> dir_uv(long long idx, long long n) {
+    long long u = idx / (n - 1), r = idx % (n - 1);
+    return {u, r < u ? r : r + 1};
+}
+
+// 稠密补集输出：候选空间 [0, total) 按序全扫，跳过缺席下标（升序），
+// 把其余候选经 map_idx 映射成边输出，恰好 want 条。
+template <typename MapIdx>
+vector<pair<int, int>> dense_emit(long long total, long long want,
+                                  const vector<long long> &absent_sorted,
+                                  MapIdx map_idx) {
+    vector<pair<int, int>> edges;
+    edges.reserve((size_t)want);
+    for (long long idx = 0, p = 0; idx < total && (long long)edges.size() < want; idx++) {
+        while (p < (long long)absent_sorted.size() && absent_sorted[p] < idx) p++;
+        if (p < (long long)absent_sorted.size() && absent_sorted[p] == idx) {
+            p++;
+            continue;
+        }
+        edges.push_back(map_idx(idx));
+    }
+    assert((long long)edges.size() == want);
+    return edges;
+}
+
+} // namespace genlib_detail
+
 // n 个节点 m 条边的简单无向连通图（n-1 <= m <= n*(n-1)/2）
 vector<pair<int, int>> gen_graph_connected(int n, int m) {
     long long max_m = (long long)n * (n - 1) / 2;
@@ -420,31 +499,66 @@ vector<pair<int, int>> gen_graph_connected(int n, int m) {
 
     // 先生成树保证连通
     auto edges = gen_tree_prufer(n);
-    set<pair<int, int>> edge_set(edges.begin(), edges.end());
-
-    // 稠密图且 n 不大时：枚举所有非树边，shuffle 后取所需数量
-    if (m > max_m * 0.7 && n <= 5000) {
-        vector<pair<int, int>> pool;
-        for (int i = 1; i <= n; i++)
-            for (int j = i + 1; j <= n; j++)
-                if (!edge_set.count({i, j}))
-                    pool.push_back({i, j});
-        rnd->shuffle(pool);
-        for (int i = 0; i < m - (n - 1); i++)
-            edges.push_back(pool[i]);
+    long long extra = m - (long long)(n - 1); // 还需要的非树边数
+    if (extra <= 0) {
         rnd->shuffle(edges);
         return edges;
     }
 
-    // 稀疏图：随机碰撞选边
-    while ((int)edges.size() < m) {
-        int u = rnd->next(1, n), v = rnd->next(1, n);
-        if (u == v) continue;
-        auto e = make_pair(min(u, v), max(u, v));
-        if (edge_set.count(e)) continue;
-        edge_set.insert(e);
-        edges.push_back(e);
+    long long avail = max_m - (long long)(n - 1); // 非树候选边总数
+    // 树邻接表（每个点单独排序）：判定一条边是不是树边，均摊 O(log deg)
+    vector<vector<int>> tree_adj(n + 1);
+    for (auto [u, v] : edges) {
+        tree_adj[u].push_back(v);
+        tree_adj[v].push_back(u);
     }
+    for (auto &adj : tree_adj) sort(adj.begin(), adj.end());
+    auto is_tree = [&](int u, int v) {
+        if (tree_adj[u].size() > tree_adj[v].size()) swap(u, v);
+        return binary_search(tree_adj[u].begin(), tree_adj[u].end(), v);
+    };
+
+    // ---- 稠密：改为采样"缺席"的非树边（max_m - m 条），全扫候选补全 ----
+    // 旧版稠密分支要求 n <= 5000，更大的 n 会掉进拒绝采样：饱和度 99% 时
+    // 期望尝试次数爆炸。补集采样对任意 n 都是 O(max_m - m) 抽样 + O(max_m) 扫描。
+    if (extra > avail / 2 && max_m <= genlib_detail::DENSE_SCAN_CAP) {
+        auto absent = genlib_detail::draw_distinct<long long>(max_m - m, [&] {
+            int u, v;
+            do {
+                u = (int)rnd->next(1, n);
+                v = (int)rnd->next(1, n);
+            } while (u == v || is_tree(u, v));
+            return genlib_detail::tri_index(min(u, v) - 1, max(u, v) - 1, n);
+        });
+        sort(absent.begin(), absent.end());
+
+        // 全扫时跳过：缺席边 ∪ 树边（树边始终在场，不能重复输出）
+        vector<long long> skip;
+        skip.reserve(absent.size() + edges.size());
+        for (auto [u, v] : edges)
+            skip.push_back(genlib_detail::tri_index(u - 1, v - 1, n));
+        skip.insert(skip.end(), absent.begin(), absent.end());
+        sort(skip.begin(), skip.end());
+
+        auto tail = genlib_detail::dense_emit(max_m, extra, skip, [&](long long idx) {
+            auto [u, v] = genlib_detail::tri_uv(idx, n);
+            return make_pair((int)u + 1, (int)v + 1);
+        });
+        edges.insert(edges.end(), tail.begin(), tail.end());
+        rnd->shuffle(edges);
+        return edges;
+    }
+
+    // ---- 稀疏：过采样 + 排序去重（比逐条 set 去重快一个量级）----
+    auto pool = genlib_detail::draw_distinct<pair<int, int>>(extra, [&] {
+        int u, v;
+        do {
+            u = (int)rnd->next(1, n);
+            v = (int)rnd->next(1, n);
+        } while (u == v || is_tree(u, v));
+        return make_pair(min(u, v), max(u, v));
+    });
+    edges.insert(edges.end(), pool.begin(), pool.end());
     rnd->shuffle(edges);
     return edges;
 }
@@ -455,24 +569,36 @@ vector<pair<int, int>> gen_dag(int n, int m) {
     assert(m <= max_m);
     auto perm = gen_permutation(n);
 
-    // 稠密情况：枚举所有可能的拓扑边
-    if (m > max_m * 0.7 && n <= 5000) {
-        vector<pair<int, int>> pool;
-        for (int i = 0; i < n; i++)
-            for (int j = i + 1; j < n; j++)
-                pool.push_back({perm[i], perm[j]});
-        rnd->shuffle(pool);
-        pool.resize(m);
-        return pool;
+    // 稠密：采样"缺席"的拓扑边，全扫补全（对任意 n 都是 O(max_m-m) 抽样 + O(max_m) 扫描）
+    if (m > max_m / 2 && max_m <= genlib_detail::DENSE_SCAN_CAP) {
+        auto absent = genlib_detail::draw_distinct<long long>(max_m - m, [&] {
+            int i, j;
+            do {
+                i = (int)rnd->next_n(n);
+                j = (int)rnd->next_n(n);
+            } while (i >= j);
+            return genlib_detail::tri_index(i, j, n);
+        });
+        sort(absent.begin(), absent.end());
+
+        auto edges = genlib_detail::dense_emit(max_m, m, absent, [&](long long idx) {
+            auto [i, j] = genlib_detail::tri_uv(idx, n);
+            return make_pair(perm[(size_t)i], perm[(size_t)j]);
+        });
+        rnd->shuffle(edges);
+        return edges;
     }
 
-    set<pair<int, int>> edge_set;
-    while ((int)edge_set.size() < m) {
-        int i = rnd->next_n(n), j = rnd->next_n(n);
-        if (i >= j) continue;
-        edge_set.insert({perm[i], perm[j]});
-    }
-    return vector<pair<int, int>>(edge_set.begin(), edge_set.end());
+    // 稀疏：过采样 + 排序去重
+    auto pool = genlib_detail::draw_distinct<pair<int, int>>(m, [&] {
+        int i, j;
+        do {
+            i = (int)rnd->next_n(n);
+            j = (int)rnd->next_n(n);
+        } while (i >= j);
+        return make_pair(perm[(size_t)i], perm[(size_t)j]);
+    });
+    return pool;
 }
 
 // n 个节点 m 条边的随机有向图（允许环，无重边无自环）
@@ -480,23 +606,36 @@ vector<pair<int, int>> gen_graph_directed(int n, int m) {
     long long max_m = (long long)n * (n - 1);
     assert(m <= max_m);
 
-    if (m > max_m * 0.7 && n <= 5000) {
-        vector<pair<int, int>> pool;
-        for (int i = 1; i <= n; i++)
-            for (int j = 1; j <= n; j++)
-                if (i != j) pool.push_back({i, j});
-        rnd->shuffle(pool);
-        pool.resize(m);
-        return pool;
+    // 稠密：采样"缺席"的有序点对，全扫补全
+    if (m > max_m / 2 && max_m <= genlib_detail::DENSE_SCAN_CAP) {
+        auto absent = genlib_detail::draw_distinct<long long>(max_m - m, [&] {
+            int u, v;
+            do {
+                u = (int)rnd->next(1, n);
+                v = (int)rnd->next(1, n);
+            } while (u == v);
+            return genlib_detail::dir_index(u - 1, v - 1, n);
+        });
+        sort(absent.begin(), absent.end());
+
+        auto edges = genlib_detail::dense_emit(max_m, m, absent, [&](long long idx) {
+            auto [u, v] = genlib_detail::dir_uv(idx, n);
+            return make_pair((int)u + 1, (int)v + 1);
+        });
+        rnd->shuffle(edges);
+        return edges;
     }
 
-    set<pair<int, int>> edge_set;
-    while ((int)edge_set.size() < m) {
-        int u = rnd->next(1, n), v = rnd->next(1, n);
-        if (u == v) continue;
-        edge_set.insert({u, v});
-    }
-    return vector<pair<int, int>>(edge_set.begin(), edge_set.end());
+    // 稀疏：过采样 + 排序去重
+    auto pool = genlib_detail::draw_distinct<pair<int, int>>(m, [&] {
+        int u, v;
+        do {
+            u = (int)rnd->next(1, n);
+            v = (int)rnd->next(1, n);
+        } while (u == v);
+        return make_pair(u, v);
+    });
+    return pool;
 }
 
 // n 个节点的完全图
@@ -513,24 +652,25 @@ vector<pair<int, int>> gen_graph_bipartite(int n1, int n2, int m) {
     long long max_m = (long long)n1 * n2;
     assert(m <= max_m);
 
-    // 稠密情况：枚举所有可能的二分边
-    if (m > max_m * 0.7 && max_m <= 25000000LL) {
-        vector<pair<int, int>> pool;
-        for (int u = 1; u <= n1; u++)
-            for (int v = n1 + 1; v <= n1 + n2; v++)
-                pool.push_back({u, v});
-        rnd->shuffle(pool);
-        pool.resize(m);
-        return pool;
+    // 稠密：采样"缺席"的左右配对，全扫补全
+    // （旧方案上限 max_m <= 25M，更大的稠密二分图会掉进拒绝采样死区）
+    if (m > max_m / 2 && max_m <= genlib_detail::DENSE_SCAN_CAP) {
+        auto absent = genlib_detail::draw_distinct<long long>(
+            max_m - m, [&] { return rnd->next(0, max_m - 1); });
+        sort(absent.begin(), absent.end());
+
+        auto edges = genlib_detail::dense_emit(max_m, m, absent, [&](long long idx) {
+            return make_pair((int)(idx / n2) + 1, (int)(n1 + 1 + idx % n2));
+        });
+        rnd->shuffle(edges);
+        return edges;
     }
 
-    set<pair<int, int>> edge_set;
-    while ((int)edge_set.size() < m) {
-        int u = rnd->next(1, n1);
-        int v = rnd->next(n1 + 1, n1 + n2);
-        edge_set.insert({u, v});
-    }
-    return vector<pair<int, int>>(edge_set.begin(), edge_set.end());
+    // 稀疏：过采样 + 排序去重
+    auto pool = genlib_detail::draw_distinct<pair<int, int>>(m, [&] {
+        return make_pair((int)rnd->next(1, n1), (int)rnd->next(n1 + 1, n1 + n2));
+    });
+    return pool;
 }
 
 // ============================================================

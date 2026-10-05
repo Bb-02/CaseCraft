@@ -352,11 +352,14 @@ static void test_trees() {
 }
 
 static void test_graphs() {
-    // 连通无向图：边数精确 + 简单 + 连通（覆盖稀疏路径与稠密路径）
+    // 连通无向图：边数精确 + 简单 + 连通（覆盖稀疏路径、稠密路径与近饱和）
+    // {50,1222}/{200,19800}：缺席边极少的近完全图；
+    // {5100,...}/{6000,...}：越过旧版 n<=5000 枚举上限、旧版会拒绝采样卡死的区间
     for (auto [n, m] : vector<pair<int, int>>{
                              {1, 0}, {2, 1}, {3, 3}, {5, 4}, {5, 10}, {10, 45},
-                             {50, 200}, {1000, 400000}, {1000, 499500},
-                             {2000, 1500000}, {10000, 15000}}) {
+                             {50, 200}, {50, 1222}, {200, 19800}, {1000, 400000},
+                             {1000, 499500}, {2000, 1500000}, {5100, 9700000},
+                             {6000, 10797000}, {10000, 15000}}) {
         auto e = gen_graph_connected(n, m);
         check_simple_graph(e, m, "connected");
         DSU d(n);
@@ -369,7 +372,7 @@ static void test_graphs() {
     // DAG：边数精确 + 简单 + 无环（Kahn 拓扑排序能排完）
     for (auto [n, m] : vector<pair<int, int>>{
                              {1, 0}, {2, 1}, {3, 2}, {3, 3}, {5, 10}, {60, 1770},
-                             {100, 4950}, {1000, 3000}}) {
+                             {40, 775}, {100, 4950}, {1000, 3000}, {5100, 9700000}}) {
         auto e = gen_dag(n, m);
         check_directed(e, m);
         int N = n;
@@ -389,12 +392,15 @@ static void test_graphs() {
         CHECK(done == N);
     }
     // 有向图
-    for (auto [n, m] : vector<pair<int, int>>{{1, 0}, {2, 1}, {3, 6}, {100, 500}, {500, 2000}}) {
+    for (auto [n, m] : vector<pair<int, int>>{
+                             {1, 0}, {2, 1}, {3, 6}, {30, 868}, {100, 500},
+                             {500, 2000}, {5100, 19500000}}) {
         check_directed(gen_graph_directed(n, m), m);
     }
     // 二分图：所有边都横跨两侧
     for (auto [n1, n2, m] : vector<tuple<int, int, int>>{
-                                {1, 1, 1}, {2, 3, 6}, {5, 5, 7}, {10, 10, 100}, {7, 3, 9}}) {
+                                {1, 1, 1}, {2, 3, 6}, {5, 5, 7}, {10, 10, 100},
+                                {7, 3, 9}, {20, 20, 397}, {5100, 5100, 19500000}}) {
         auto e = gen_graph_bipartite(n1, n2, m);
         CHECK((int)e.size() == m);
         set<pair<int, int>> seen;
@@ -409,6 +415,54 @@ static void test_graphs() {
         auto e = gen_graph_complete(5);
         CHECK((int)e.size() == 10);
         check_simple_graph(e, 10, "complete");
+    }
+}
+
+// 候选空间编号的双向映射（稠密补集路径的底座）：穷举小 n 验证双射 + 大 n 抽查
+static void test_index_helpers() {
+    using genlib_detail::dir_index;
+    using genlib_detail::dir_uv;
+    using genlib_detail::tri_index;
+    using genlib_detail::tri_uv;
+    for (long long n = 1; n <= 60; n++) {
+        if (n < 2) continue;
+        long long total = n * (n - 1) / 2;
+        set<long long> seen;
+        for (long long u = 0; u < n; u++)
+            for (long long v = u + 1; v < n; v++) {
+                long long idx = tri_index(u, v, n);
+                CHECK(0 <= idx && idx < total);
+                seen.insert(idx);
+                auto [u2, v2] = tri_uv(idx, n);
+                CHECK(u2 == u && v2 == v);
+            }
+        CHECK((int)seen.size() == (int)total);
+        // 有向完全图
+        set<long long> seen2;
+        for (long long u = 0; u < n; u++)
+            for (long long v = 0; v < n; v++) {
+                if (u == v) continue;
+                long long idx = dir_index(u, v, n);
+                CHECK(0 <= idx && idx < n * (n - 1));
+                seen2.insert(idx);
+                auto [u2, v2] = dir_uv(idx, n);
+                CHECK(u2 == u && v2 == v);
+            }
+        CHECK((int)seen2.size() == (int)(n * (n - 1)));
+    }
+    // 大 n 边界抽查（覆盖浮点开方的修正路径）
+    {
+        long long n = 28209; // 约为 DENSE_SCAN_CAP 对应的规模
+        long long total = n * (n - 1) / 2;
+        for (long long idx : {0LL, 1LL, total / 2, total - 2, total - 1}) {
+            auto [u, v] = tri_uv(idx, n);
+            CHECK(tri_index(u, v, n) == idx);
+        }
+        long long dtotal = n * (n - 1);
+        for (long long idx : {0LL, 1LL, dtotal / 2, dtotal - 2, dtotal - 1}) {
+            auto [u, v] = dir_uv(idx, n);
+            CHECK(dir_index(u, v, n) == idx);
+        }
     }
 }
 
@@ -447,6 +501,7 @@ int main() {
     test_arrays_and_strings();
     test_trees();
     test_graphs();
+    test_index_helpers();
     test_data_writer();
     delete rnd;
     rnd = saved;

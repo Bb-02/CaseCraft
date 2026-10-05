@@ -21,15 +21,16 @@ run: gen
 newcase: newcase.cpp
 	$(CXX) $(CXXFLAGS) newcase.cpp -o newcase
 
-# duipai/bench 自测：跑完全部检查，退出码 0 = 通过
-test: tests/test_duipai.cpp tests/test_bench.cpp gen_lib.h duipai.h bench.h
+# duipai/bench/gen_lib 自测：跑完全部检查，退出码 0 = 通过
+test: tests/test_duipai.cpp tests/test_bench.cpp tests/test_gen_lib.cpp gen_lib.h duipai.h bench.h
 	$(CXX) $(CXXFLAGS) tests/test_duipai.cpp -o test_duipai
 	$(CXX) $(CXXFLAGS) tests/test_bench.cpp -o test_bench
-	./test_duipai && ./test_bench
+	$(CXX) $(CXXFLAGS) tests/test_gen_lib.cpp -o test_genlib
+	./test_duipai && ./test_bench && ./test_genlib
 
 # 清理所有生成数据
 clean:
-	rm -f gen gen_template gen_graph newcase test_duipai test_bench
+	rm -f gen gen_template gen_graph newcase test_duipai test_bench test_genlib
 	rm -rf Data/*_Data Data/*_Duipai
 
 .PHONY: template example gen run newcase clean

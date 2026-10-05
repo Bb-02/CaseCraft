@@ -133,33 +133,38 @@ struct Random {
         return s[next_n(s.size())];
     }
 
-    // 不放回地挑选 k 个元素
+    // 不放回地挑选 k 个元素（Floyd 抽样，O(k)，与 v.size() 无关）
     template <typename T> vector<T> sample(const vector<T> &v, int k) {
         assert(0 <= k && k <= (int)v.size());
-        vector<int> idx(v.size());
-        iota(idx.begin(), idx.end(), 0);
-        std::shuffle(idx.begin(), idx.end(), engine);
-        vector<T> res(k);
-        for (int i = 0; i < k; i++) res[i] = v[idx[i]];
+        vector<T> res;
+        res.reserve(k);
+        for (long long i : distinct(k, 0, (long long)v.size() - 1))
+            res.push_back(v[(size_t)i]);
         return res;
     }
 
     // 生成唯一的随机整数集合（[l, r] 中取 k 个不重复的）
+    // Floyd 抽样：O(k) 时间 / O(k) 空间，与 r-l 大小无关——
+    // 旧版在 k 接近区间总量时要把整个区间物化出来（1e9 范围 = 8GB），现在不会了
     vector<long long> distinct(int k, long long l, long long r) {
-        assert(k <= r - l + 1);
-        if (k < (r - l + 1) / 3) {
-            unordered_set<long long> used;
-            vector<long long> res;
-            while ((int)res.size() < k) {
-                long long x = next(l, r);
-                if (used.insert(x).second) res.push_back(x);
-            }
-            return res;
+        vector<long long> res;
+        if (k <= 0) return res; // k=0 直接返回（gen_partition(1,1) 的空区间会走到）
+        // 区间长度用无符号减法：l=-2^62、r=2^62 时 r-l+1 会溢出有符号数
+        assert((unsigned long long)(k - 1) <= (unsigned long long)r - (unsigned long long)l);
+        res.reserve(k);
+        // swap-map：记录"某个位置当前代表的值"（没映射的位置代表它自己）。
+        // 每轮从 [l, r-i] 抽一个位置，取出它现值输出，再把"末尾位置"的值挪进去，
+        // 等价于对概念数组做 partial Fisher-Yates。
+        unordered_map<long long, long long> slot;
+        for (long long i = 0; i < k; i++) {
+            long long t = next(l, r - i);
+            auto it = slot.find(t);
+            long long val = it != slot.end() ? it->second : t;
+            res.push_back(val);
+            auto it2 = slot.find(r - i);
+            slot[t] = it2 != slot.end() ? it2->second : r - i;
         }
-        vector<long long> all(r - l + 1);
-        iota(all.begin(), all.end(), l);
-        shuffle(all);
-        return vector<long long>(all.begin(), all.begin() + k);
+        return res;
     }
 };
 

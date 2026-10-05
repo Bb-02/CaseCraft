@@ -48,18 +48,19 @@ extern void brute(istream &in, ostream &out);
 
 // 按行切分 + 规范化：去掉每行行尾空白（空格/Tab/\r），去掉文末空行。
 // 行首空白、中间空行、行内空白都原样保留参与比较。
+// 用 find 找换行整段构造，比逐字符 push_back 快（大输出对拍时明显）。
 inline vector<string> duipai_lines(const string &s) {
     vector<string> lines;
-    string cur;
-    for (char c : s) {
-        if (c == '\n') {
-            lines.push_back(cur);
-            cur.clear();
-        } else {
-            cur.push_back(c);
+    size_t pos = 0;
+    while (pos < s.size()) {
+        size_t nl = s.find('\n', pos);
+        if (nl == string::npos) {
+            lines.emplace_back(s, pos, s.size() - pos);
+            break;
         }
+        lines.emplace_back(s, pos, nl - pos);
+        pos = nl + 1;
     }
-    if (!cur.empty()) lines.push_back(cur); // 末尾没有换行也算一行
     for (string &l : lines)
         while (!l.empty() && (l.back() == ' ' || l.back() == '\t' || l.back() == '\r'))
             l.pop_back();

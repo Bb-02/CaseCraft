@@ -232,6 +232,41 @@ vector<long long> gen_array_unique(int n, long long l, long long r) {
     return rnd->distinct(n, l, r);
 }
 
+// 生成 n 个区间 [L, R]：l <= L <= R <= r；strict = true 时要求 L < R
+vector<pair<long long, long long>> gen_intervals(int n, long long l, long long r,
+                                                 bool strict = false) {
+    assert(strict ? r > l : r >= l);
+    vector<pair<long long, long long>> res((size_t)n);
+    for (auto &iv : res) {
+        long long L = rnd->next(l, strict ? r - 1 : r);
+        long long R = strict ? rnd->next(L + 1, r) : rnd->next(L, r);
+        iv = {L, R};
+    }
+    return res;
+}
+
+// 生成 n 个互不相同的二维整点 (x, y)：x ∈ [x_lo, x_hi]，y ∈ [y_lo, y_hi]
+// 注意：两个方向的跨度都不要超过 3e9（去重 key 要打包进 64 位）；
+// n 接近点阵总量时会退化成拒绝采样，请留给足够稀疏的范围
+vector<pair<long long, long long>> gen_points_2d(int n, long long x_lo, long long x_hi,
+                                                 long long y_lo, long long y_hi) {
+    assert(n >= 0);
+    long long y_span = y_hi - y_lo + 1;
+    // 跨度上限保证下面乘积（<= 9e18）不溢出 long long
+    assert(x_hi - x_lo + 1 <= 3'000'000'000LL && y_span <= 3'000'000'000LL);
+    assert((x_hi - x_lo + 1) * y_span >= n);
+    unordered_set<long long> used;
+    used.reserve((size_t)n * 2);
+    vector<pair<long long, long long>> res;
+    res.reserve((size_t)n);
+    while ((int)res.size() < n) {
+        long long x = rnd->next(x_lo, x_hi), y = rnd->next(y_lo, y_hi);
+        long long key = (x - x_lo) * y_span + (y - y_lo);
+        if (used.insert(key).second) res.push_back({x, y});
+    }
+    return res;
+}
+
 // ============================================================
 // 排列生成器
 // ============================================================
@@ -305,6 +340,38 @@ string gen_string_distinct(int n) {
     string chars = "abcdefghijklmnopqrstuvwxyz";
     auto picked = rnd->sample(vector<char>(chars.begin(), chars.end()), n);
     return string(picked.begin(), picked.end());
+}
+
+// 生成周期为 period 的随机串（长度 n，最后一段可能截断）。
+// 周期串有长 border，常用来卡 KMP / 哈希
+string gen_string_period(int n, int period) {
+    assert(n >= 0 && period >= 1);
+    string block = gen_string(period);
+    string s;
+    s.reserve((size_t)n);
+    for (int i = 0; i < n; i++) s += block[i % period];
+    return s;
+}
+
+// 生成长度为 n 的合法括号串（n 为偶数）：任意前缀 ')' 不多于 '('，整体平衡
+string gen_bracket(int n) {
+    assert(n >= 0 && n % 2 == 0);
+    string s;
+    s.reserve((size_t)n);
+    int bal = 0;
+    for (int i = 0; i < n; i++) {
+        int open_used = (i + bal) / 2; // 已放的开括号数
+        bool open;
+        if (bal == 0)
+            open = true; // 必须开
+        else if (open_used == n / 2)
+            open = false; // 开括号用完，必须关
+        else
+            open = rnd->chance(0.5);
+        s += open ? '(' : ')';
+        bal += open ? 1 : -1;
+    }
+    return s;
 }
 
 // ============================================================
@@ -408,6 +475,20 @@ vector<int> gen_parent_array(int n) {
             if (!vis[v]) vis[v] = true, parent[v] = u, q.push(v);
     }
     return vector<int>(parent.begin() + 2, parent.end());
+}
+
+// n 个节点的毛毛虫树：一条主干链，其余节点轮流挂到主干的叶子。
+// 度数结构对树上算法（长链剖分、点分治的退化情形）很有杀伤力
+vector<pair<int, int>> gen_tree_caterpillar(int n) {
+    vector<pair<int, int>> edges;
+    if (n <= 1) return edges;
+    int spine = max(1, n / 2); // 主干节点数
+    for (int i = 1; i < spine; i++) edges.push_back({i, i + 1});
+    for (int v = spine + 1; v <= n; v++) {
+        int u = (v - spine - 1) % spine + 1; // 轮转，保证叶子够多时每个主干节点都有叶子
+        edges.push_back({min(u, v), max(u, v)});
+    }
+    return edges;
 }
 
 // ============================================================
@@ -745,6 +826,14 @@ void print_real_vec(ostream &o, const vector<T> &v, int precision = 6) {
 template <typename T>
 void print_real_vec(const vector<T> &v, int precision = 6) {
     print_real_vec(cout, v, precision);
+}
+
+// 单文件多组数据：先写 T，再依次调 gen_one 写每组（每组自带换行）。
+// 用法：write_multi_case(o, T, [&](ostream &g){ g << n << '\n'; print_vec(g, a); });
+inline void write_multi_case(ostream &o, int T,
+                             const function<void(ostream &)> &gen_one) {
+    o << T << '\n';
+    for (int i = 0; i < T; i++) gen_one(o);
 }
 
 // 创建目录（跨平台）；失败时抛异常（含路径和原因），

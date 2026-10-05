@@ -195,6 +195,8 @@ CaseCraft/
 | `gen_string(n, "01")` | 随机 01 串 | `gen_string(8, "01")` → `"01101001"` |
 | `gen_palindrome(n)` | 长度 n 的随机回文串 | `gen_palindrome(5)` → `"abcba"` |
 | `gen_string_distinct(n)` | 长度 n 的全不同小写字母 | `gen_string_distinct(5)` → `"kfxap"` |
+| `gen_string_period(n, p)` | 周期为 p 的随机串（卡 KMP/哈希） | `gen_string_period(100, 7)` |
+| `gen_bracket(n)` | 长度 n 的合法括号串（n 为偶数） | `gen_bracket(10)` → `"()(())()"` |
 
 ---
 
@@ -209,6 +211,7 @@ CaseCraft/
 | `gen_tree_chain(n)` | 链（1-2-3-...-n） |
 | `gen_tree_deg_capped(n, d)` | 每个节点度数 ≤ d 的随机树 |
 | `gen_tree_binary(n)` | 随机二叉树（每个节点最多 2 子） |
+| `gen_tree_caterpillar(n)` | 毛毛虫树（主干链 + 叶子，卡树上算法） |
 | `gen_parent_array(n)` | 有根树(1为根)的父节点数组，返回 p[2..n] |
 
 使用示例：
@@ -244,6 +247,8 @@ for (int i = 2; i <= 10; i++)
 | 函数 | 说明 |
 |------|------|
 | `gen_partition(n, k)` | 把 n 随机分成 k 个正整数的和 |
+| `gen_intervals(n, l, r)` | n 个区间 [L,R]，l ≤ L ≤ R ≤ r；加 `true` 参数要求 L < R |
+| `gen_points_2d(n, xl, xr, yl, yr)` | n 个互不相同的二维整点 |
 
 ---
 
@@ -257,6 +262,7 @@ for (int i = 2; i <= 10; i++)
 | `print_real_vec(o, v, p)` | 输出浮点 vector，p 位小数 | `print_real_vec(o, f, 6)` |
 | `print_edges(o, e)` | 输出边集 | `print_edges(o, edges)` |
 | `println(args...)` | 输出到屏幕 | `println("n =", n)` |
+| `write_multi_case(o, T, fn)` | 单文件多组数据：先写 T，再逐组调 fn | 见下文 |
 
 ---
 
@@ -482,6 +488,18 @@ dw.next([](ostream &o) {
         o << n << '\n';
         print_vec(o, gen_array(n, 1, 1000));
     }
+});
+```
+
+或者用 helper（第一行写 T，然后逐组调 lambda）：
+
+```cpp
+dw.next([](ostream &o) {
+    write_multi_case(o, 100, [](ostream &g) {
+        int n = rnd->next(1, 100);
+        g << n << '\n';
+        print_vec(g, gen_array(n, 1, 1000));
+    });
 });
 ```
 

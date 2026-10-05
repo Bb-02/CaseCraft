@@ -466,6 +466,96 @@ static void test_index_helpers() {
     }
 }
 
+// 新增生成器：区间对 / 二维点集 / 括号串 / 周期串 / 毛毛虫树 / 多测 helper
+static void test_new_generators() {
+    // 区间对：范围 + 数量 + strict 语义
+    for (int t = 0; t < 500; t++) {
+        auto ivs = gen_intervals(20, -50, 50);
+        CHECK((int)ivs.size() == 20);
+        for (auto [L, R] : ivs) CHECK(-50 <= L && L <= R && R <= 50);
+        auto strict = gen_intervals(20, 1, 10, true);
+        for (auto [L, R] : strict) CHECK(1 <= L && L < R && R <= 10);
+    }
+    // 单点区间（l == r）只能非 strict
+    {
+        auto ivs = gen_intervals(5, 7, 7);
+        for (auto [L, R] : ivs) CHECK(L == 7 && R == 7);
+    }
+    // 二维点集：数量、范围、互不相同
+    {
+        auto pts = gen_points_2d(300, -100, 100, -100, 100);
+        CHECK((int)pts.size() == 300);
+        set<pair<long long, long long>> s(pts.begin(), pts.end());
+        CHECK((int)s.size() == 300);
+        for (auto [x, y] : pts)
+            CHECK(-100 <= x && x <= 100 && -100 <= y && y <= 100);
+    }
+    // 括号串：长度、字符集、任意前缀不欠、整体平衡
+    for (auto n : vector<int>{0, 2, 4, 10, 100, 2000}) {
+        auto s = gen_bracket(n);
+        CHECK((int)s.size() == n);
+        int bal = 0;
+        bool ok = true;
+        for (char c : s) {
+            if (c != '(' && c != ')') ok = false;
+            bal += c == '(' ? 1 : -1;
+            if (bal < 0) ok = false;
+        }
+        CHECK(ok);
+        CHECK(bal == 0);
+    }
+    // 周期串：严格周期性；period >= n 时是普通随机串
+    {
+        auto s = gen_string_period(37, 7);
+        CHECK((int)s.size() == 37);
+        for (int i = 0; i < 37; i++) CHECK(s[i] == s[i % 7]);
+        auto s1 = gen_string_period(10, 1);
+        for (char c : s1) CHECK(c == s1[0]);
+        auto s2 = gen_string_period(5, 9);
+        CHECK((int)s2.size() == 5);
+        for (char c : s2) CHECK('a' <= c && c <= 'z');
+    }
+    // 毛毛虫树：树合法 + 主干（度>=2 的点）构成链 + 叶子都挂在主干上
+    for (auto n : vector<int>{1, 2, 3, 5, 8, 100, 1000}) {
+        auto e = gen_tree_caterpillar(n);
+        check_tree(e, n, "caterpillar");
+        if (n < 2) continue;
+        vector<int> deg(n + 1, 0);
+        vector<vector<int>> adj(n + 1);
+        for (auto [u, v] : e) {
+            deg[u]++, deg[v]++;
+            adj[u].push_back(v), adj[v].push_back(u);
+        }
+        vector<int> spine;
+        for (int i = 1; i <= n; i++)
+            if (deg[i] >= 2) spine.push_back(i);
+        if (!spine.empty()) {
+            DSU d(n);
+            for (auto [u, v] : e)
+                if (deg[u] >= 2 && deg[v] >= 2) d.uni(u, v);
+            for (int u : spine) CHECK(d.find(u) == d.find(spine[0]));
+            for (int u : spine) {
+                int spine_nb = 0;
+                for (int w : adj[u])
+                    if (deg[w] >= 2) spine_nb++;
+                CHECK(spine_nb <= 2); // 主干是链
+            }
+            for (int i = 1; i <= n; i++) {
+                if (deg[i] != 1) continue;
+                bool on_spine = false;
+                for (int w : adj[i]) on_spine = on_spine || deg[w] >= 2;
+                CHECK(on_spine); // 叶子必挂主干
+            }
+        }
+    }
+    // 单文件多测 helper
+    {
+        ostringstream o;
+        write_multi_case(o, 3, [](ostream &g) { g << 42 << '\n'; });
+        CHECK(o.str() == "3\n42\n42\n42\n");
+    }
+}
+
 static void test_data_writer() {
     // 命名规则：[prefix_]NNN.ext
     fs::remove_all("Data/genlib_selftest_Data");
@@ -502,6 +592,7 @@ int main() {
     test_trees();
     test_graphs();
     test_index_helpers();
+    test_new_generators();
     test_data_writer();
     delete rnd;
     rnd = saved;

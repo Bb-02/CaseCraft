@@ -304,6 +304,9 @@ gen_output(solve);
 
 自动扫描 `Data/{id}_Data/` 下所有 `.in` 文件，逐个读入 → 跑 `solve(in, out)` → 写出 `.out`。
 
+每个文件会**顺带计时**：超过 1000ms 的会打 `!! 超过 1000 ms，注意 TLE 风险` 警告，
+提前发现"某组数据把题解卡 TLE"。阈值改不了就无视它，看每组的毫秒数即可。
+
 `solve` 签名固定为：
 
 ```cpp
@@ -311,6 +314,45 @@ void solve(istream &in, ostream &out) {
     // in 当 cin 用，out 当 cout 用
 }
 ```
+
+---
+
+# 数据校验 — 用 validate_input 自动检查数据合法性
+
+出题最容易犯的错：数据超范围、图有自环重边、边数不对、多测组数超限……
+写一个校验函数让它自动查。
+
+在题目 .cpp 里实现（`newcase` 生成的骨架自带空壳）：
+
+```cpp
+// 像题解一样读入，检查所有约束。
+// 合法返回 true；非法返回 false 并把一句话原因写进 err。
+bool validate_input(istream &in, string &err) {
+    int n;
+    if (!(in >> n)) { err = "第一行应为整数 n"; return false; }
+    if (n < 1 || n > 100000) { err = "n 超出 [1, 100000]"; return false; }
+    // ... 边数、权值范围、自环重边、无解条件 ...
+    return true;
+}
+```
+
+然后一条命令：
+
+```bash
+./gen check        # 逐个检查 Data/{id}_Data/*.in
+```
+
+```
+  [001.in] ok
+  [002.in] FAILED: n 超出 [1, 100000]
+Check failed: 1/15 files invalid.
+```
+
+有文件不合法（或目录不存在 / 没有 .in）时退出码为 1，方便脚本判断。
+校验函数抛异常也按"不合法"处理，不会中断其余文件的检查。
+
+> 建议：固定种子出完数据后跑一遍 `./gen check` 再交题；改了 `generate_input`
+> 之后也要重跑。
 
 ---
 
@@ -537,8 +579,9 @@ for (auto &tc : cases) {
 |------|------|
 | `./gen` | 生成输入（随机种子） |
 | `./gen 12345` | 生成输入（种子=12345，可复现） |
-| `./gen out` | 生成输出 |
+| `./gen out` | 生成输出（逐文件计时，超 1s 警告） |
 | `./gen 12345 out` | 生成输出（指定种子，`out` 位置随意） |
+| `./gen check` | 校验数据合法性（validate_input） |
 | `./gen duipai` | 对拍 100 轮（solve vs brute） |
 | `./gen duipai 1000` | 对拍 1000 轮 |
 | `./gen duipai 1000 12345` | 对拍 1000 轮（种子=12345，可复现） |
@@ -546,7 +589,8 @@ for (auto &tc : cases) {
 | `./gen bench 10 42` | 计时测评 10 遍（种子=42，可复现） |
 
 对拍发现不一致 / 运行出错时退出码为 1；bench 在有实现抛异常或输出不一致时
-退出码为 1，方便脚本判断。
+退出码为 1；check 在有文件不合法（或目录不存在 / 没有 .in）时退出码为 1，
+方便脚本判断。
 
 ---
 
@@ -556,8 +600,9 @@ for (auto &tc : cases) {
 2. 写 `Generators/Xxx/题面.md`
 3. 写 `generate_input()` — 用 `dw.next()` 和 `gen_xxx()` 造数据
 4. 写 `solve(istream&, ostream&)` — 题解
-5. 写 `gen_case()` 和 `brute()` — 对拍三件套，`./gen duipai` 验证题解正确性
-6. （可选）写 `gen_bench()` 和 `bench_register()` — `./gen bench` 对比改动前后耗时
-7. 在根目录编译：`cl /utf-8 /EHsc /std:c++17 /O2 /Fe:gen.exe Generators/Xxx/Xxx.cpp`
-8. `./gen duipai` 对拍通过 → `./gen` 生成输入，`./gen out` 生成输出
-9. 检查 `Data/Xxx_Data/` 目录下的 `.in` 和 `.out`
+5. （可选）写 `validate_input()` — `./gen check` 自动检查数据合法性
+6. 写 `gen_case()` 和 `brute()` — 对拍三件套，`./gen duipai` 验证题解正确性
+7. （可选）写 `gen_bench()` 和 `bench_register()` — `./gen bench` 对比改动前后耗时
+8. 在根目录编译：`cl /utf-8 /EHsc /std:c++17 /O2 /Fe:gen.exe Generators/Xxx/Xxx.cpp`
+9. `./gen duipai` 对拍通过 → `./gen` 生成输入 → `./gen check` 校验 → `./gen out` 生成输出
+10. 检查 `Data/Xxx_Data/` 目录下的 `.in` 和 `.out`

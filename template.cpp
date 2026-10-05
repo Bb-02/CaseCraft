@@ -4,6 +4,7 @@
  * 用法：
  *   生成输入数据：./gen [seed]
  *   生成输出数据：./gen out
+ *   校验数据：   ./gen check                （检查 .in 是否满足约束，见步骤 2.5）
  *   对拍验证：  ./gen duipai [rounds] [seed]   （solve vs brute，见步骤 3）
  *
  * 数据输出到：Data/{g_problem_id}_Data/
@@ -105,6 +106,27 @@ void solve(istream &in, ostream &out) {
 }
 
 // ============================================================
+// && 步骤 2.5（可选，./gen check 用）：数据校验
+// ============================================================
+// 像题解一样读入，检查所有约束（范围 / 自环重边 / 边数上限 / 无解条件……）。
+// 合法返回 true；非法返回 false 并把一句话原因写进 err。
+// 模板自带的演示数据格式五花八门，这里只演示"两个整数 + 范围"的检查方式；
+// 写自己的题目时，换成与你的输入格式对应的约束即可。
+bool validate_input(istream &in, string &err) {
+    long long a, b;
+    if (!(in >> a >> b)) {
+        err = "读入失败：应为一行两个整数 a b";
+        return false;
+    }
+    if (a < -1000000000LL || a > 1000000000LL || b < -1000000000LL ||
+        b > 1000000000LL) {
+        err = "a 或 b 超出 [-1e9, 1e9]";
+        return false;
+    }
+    return true;
+}
+
+// ============================================================
 // && 步骤 3（可选但对拍必填）：./gen duipai 用暴力验证 solve
 // ============================================================
 // gen_case：造一个【小】随机数据。brute 要跑得动，规模控制在几十以内。
@@ -145,15 +167,16 @@ int main(int argc, char *argv[]) {
     //   ./gen                    生成输入（随机种子）
     //   ./gen 12345              生成输入（种子=12345，可复现）
     //   ./gen out                生成输出（"out" 写在哪个位置都行）
+    //   ./gen check              校验 Data/{id}_Data 里的 .in 是否满足约束
     //   ./gen duipai [r] [seed]  对拍：solve vs brute，默认 100 轮
     //   ./gen bench [r] [seed]   计时：横向对比 bench_register 里的实现，默认 5 遍
     string mode;
     vector<string> nums;
     for (int i = 1; i < argc; i++) {
         string arg = argv[i];
-        if (arg == "out" || arg == "duipai" || arg == "bench") {
+        if (arg == "out" || arg == "duipai" || arg == "bench" || arg == "check") {
             if (!mode.empty()) {
-                cerr << "Error: out / duipai / bench 只能三选一\n";
+                cerr << "Error: out / duipai / bench / check 只能四选一\n";
                 return 1;
             }
             mode = arg;
@@ -167,6 +190,8 @@ int main(int argc, char *argv[]) {
             return run_duipai_cli(nums); // 内部会接管全局 rnd（详见 duipai.h）
         if (mode == "bench")
             return run_bench_cli(nums); // 详见 bench.h
+        if (mode == "check")
+            return check_input(validate_input); // 详见 gen_lib.h
 
         // ---- 种子初始化 ----
         // Random 底层是 mt19937_64 伪随机引擎：

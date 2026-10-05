@@ -556,6 +556,58 @@ static void test_new_generators() {
     }
 }
 
+// check_input：扫描目录、逐文件校验、异常按失败处理、返回码
+static void test_check_input() {
+    const string dir = "Data/genlib_check_test";
+    // 校验器：读一个 token；"boom" 抛异常；数字要求在 [1,10]
+    auto validator = [](istream &in, string &err) -> bool {
+        string tok;
+        in >> tok;
+        if (tok == "boom") throw runtime_error("validator exploded");
+        if (tok.empty()) {
+            err = "空输入";
+            return false;
+        }
+        long long x = stoll(tok);
+        if (x < 1 || x > 10) {
+            err = "x 超出 [1,10]";
+            return false;
+        }
+        return true;
+    };
+
+    // 目录不存在 → 1
+    error_code ec;
+    fs::remove_all(dir, ec);
+    CHECK(check_input(validator, dir) == 1);
+
+    // 混合：合法 / 越界 / 抛异常 → 1
+    fs::create_directories(dir);
+    {
+        ofstream(dir + "/001.in") << "5\n";
+        ofstream(dir + "/002.in") << "999\n";
+        ofstream(dir + "/003.in") << "boom\n";
+    }
+    CHECK(check_input(validator, dir) == 1);
+
+    // 全合法 → 0
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir);
+    {
+        ofstream(dir + "/001.in") << "3\n";
+        ofstream(dir + "/002.in") << "10\n";
+    }
+    CHECK(check_input(validator, dir) == 0);
+
+    // 目录在但没有 .in → 1
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir);
+    ofstream(dir + "/readme.txt") << "not a case\n";
+    CHECK(check_input(validator, dir) == 1);
+
+    fs::remove_all(dir, ec);
+}
+
 static void test_data_writer() {
     // 命名规则：[prefix_]NNN.ext
     fs::remove_all("Data/genlib_selftest_Data");
@@ -593,6 +645,7 @@ int main() {
     test_graphs();
     test_index_helpers();
     test_new_generators();
+    test_check_input();
     test_data_writer();
     delete rnd;
     rnd = saved;

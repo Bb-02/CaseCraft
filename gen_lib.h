@@ -920,8 +920,10 @@ struct DataWriter {
 //
 // 会自动扫描 Data/{id}_Data/ 下的所有 .in 文件，
 // 逐个读取、运行 solve、写出 .out 文件。
+// 每个文件顺带计时；超过 warn_ms（默认 1000ms）会打警告，
+// 提前发现"某组数据把题解卡 TLE"。
 inline void gen_output(const function<void(istream &, ostream &)> &solve,
-                       const string &dir_hint = "") {
+                       const string &dir_hint = "", double warn_ms = 1000.0) {
     string dir = dir_hint;
     if (dir.empty()) {
         if (!g_problem_id.empty())
@@ -968,13 +970,96 @@ inline void gen_output(const function<void(istream &, ostream &)> &solve,
             cerr << "Failed to write: " << out_path << '\n';
             continue;
         }
+        auto t0 = chrono::steady_clock::now();
         solve(fin, fout);
+        double ms = chrono::duration<double, milli>(chrono::steady_clock::now() - t0).count();
 
-        cerr << "  [" << in_path.filename() << "] -> "
-             << out_path.filename() << '\n';
+        cerr << "  [" << in_path.filename() << "] -> " << out_path.filename() << "  ("
+             << fixed << setprecision(1) << ms << " ms)";
+        if (ms > warn_ms)
+            cerr << "  !! 超过 " << (long long)warn_ms << " ms，注意 TLE 风险";
+        cerr << '\n';
     }
 
     cerr << "Done! " << in_files.size() << " output files generated.\n";
+}
+
+// ============================================================
+// check_input — 校验生成的 .in 是否满足题目约束（./gen check）
+// ============================================================
+// 出题最容易犯的错：数据超范围、图有自环重边、边数不对……
+// 在题目 .cpp 里实现一个校验函数（像题解一样读入，检查所有约束）：
+//   bool validate_input(istream &in, string &err);
+// 合法返回 true；非法返回 false 并把一句话原因写进 err。
+//
+//   ./gen check        逐个检查 Data/{id}_Data/*.in，全部通过退出码 0
+//
+// 返回值：0 = 全部通过；1 = 有文件不合法 / 目录不存在 / 没有 .in（方便脚本判断）。
+// 校验函数抛异常也按"不合法"处理，不影响其余文件的检查。
+inline int check_input(const function<bool(istream &, string &)> &validate,
+                       const string &dir_hint = "") {
+    string dir = dir_hint;
+    if (dir.empty()) {
+        if (!g_problem_id.empty())
+            dir = "Data/" + g_problem_id + "_Data";
+        else
+            dir = "data";
+    }
+
+    if (!fs::exists(dir)) {
+        cerr << "Directory not found: " << dir << '\n';
+        cerr << "Run without 'out' first to generate input files.\n";
+        return 1;
+    }
+
+    // 收集所有 .in 文件，按文件名排序（与 gen_output 同一规则）
+    vector<fs::path> in_files;
+    for (auto &entry : fs::directory_iterator(dir)) {
+        if (entry.path().extension() == ".in") {
+            in_files.push_back(entry.path());
+        }
+    }
+    sort(in_files.begin(), in_files.end());
+
+    if (in_files.empty()) {
+        cerr << "No .in files found in " << dir << '\n';
+        return 1;
+    }
+
+    int fail = 0;
+    for (auto &in_path : in_files) {
+        ifstream fin(in_path);
+        if (!fin) {
+            cerr << "  [" << in_path.filename() << "] FAILED: cannot open\n";
+            fail++;
+            continue;
+        }
+        string err;
+        bool ok;
+        try {
+            ok = validate(fin, err);
+        } catch (const exception &e) {
+            ok = false;
+            err = string("validate_input threw exception: ") + e.what();
+        } catch (...) {
+            ok = false;
+            err = "validate_input threw unknown exception";
+        }
+        if (ok) {
+            cerr << "  [" << in_path.filename() << "] ok\n";
+        } else {
+            fail++;
+            cerr << "  [" << in_path.filename() << "] FAILED: " << err << '\n';
+        }
+    }
+
+    if (fail == 0)
+        cerr << "Check passed! " << in_files.size() << "/" << in_files.size()
+             << " files ok.\n";
+    else
+        cerr << "Check failed: " << fail << "/" << in_files.size()
+             << " files invalid.\n";
+    return fail == 0 ? 0 : 1;
 }
 
 // ============================================================
